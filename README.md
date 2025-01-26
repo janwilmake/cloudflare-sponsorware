@@ -52,7 +52,7 @@ export default {
     // and if you want to limit stuff...
     const { isAuthenticated, login, id, isSponsor, ltv, spent } =
       await getSponsor(request, env);
-    if (spent > ltv) {
+    if (!isSponsor || spent > ltv) {
       return new Response(
         "Payment required. Sponsor me! https://github.com/sponsors/janwilmake",
         { status: 402 },
