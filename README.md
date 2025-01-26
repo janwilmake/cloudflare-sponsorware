@@ -40,10 +40,10 @@ export default {
 
 1. ✅ Create a standalone repo called `cloudflare-sponsorware` that you can just use it with your app to allow for github login, github watching sponsorship events, and keeping the KV. people can use their own github acc and cloudflare acc for this. Open source.
 2. ✅ Buy sponsorflare.com and set up the repo and [tweet](https://x.com/janwilmake/status/1883493435635585198)
-3. Actually subscribe to watching all repos upon login (via a waituntil+scheduled api call).
-4. Ensure per user I know the source (where/when they logged in)
-5. Watch also triggers calculating all repo stuff, so we end up with a file of all repos + calcs that is refreshed each time something changes. 🐐
-6. Watch subscriber userId, and subscriber event, store total livetime value with creditSpent ensuring it makes sense. Keep that in a central KV that is reliable: we need probably D1 for consistency.
+3. ✅ Make sponsorflare github oauth work (took just 5 minutes!) and create indended demo-layout with Deepseek (took just 1 minute)
+4. Actually subscribe to watching sponsor events (via a waituntil).
+5. Come up with datastructure for consistent storage. It needs `type Sponsors={source,ownerId,ownerLogin,clv,spent}` for the POC.
+6. Watch subscriber userId, and subscriber event, store total livetime value with money spent ensuring it makes sense. Keep that in a central KV that is reliable: we need probably D1 for consistency.
 
 https://docs.x.com/x-api/enterprise-gnip-2.0/fundamentals/account-activity#managing-subscribed-users
 
