@@ -19,12 +19,12 @@ Installation:
 ```toml
 [vars]
 GITHUB_REDIRECT_URI = "https://yourworkerdomain.com/callback"
-LOGIN_REDIRECT_URI = "/"`
+LOGIN_REDIRECT_URI = "/"
 ```
 
 `main.ts`:
 
-```ts
+```typescript
 import { middleware, userPaid, getLifetimeValue } from "sponsorflare";
 
 type Env = {
