@@ -1,49 +1,44 @@
+import { middleware, getLifetimeValue } from "./mod";
 import login, { Env, html } from "./github-login";
-import dashboard from "./dashboard.html";
+
 export default {
   fetch: async (request: Request, env: Env) => {
-    const response = await login.fetch(request, env);
-    if (response) return response;
+    // Handle logout
     const url = new URL(request.url);
-    const cookie = request.headers.get("Cookie");
-    const rows = cookie?.split(";").map((x) => x.trim());
-    const authHeader = rows?.find((row) => row.startsWith("authorization="));
-    const authorization = authHeader
-      ? decodeURIComponent(authHeader.split("=")[1].trim())
-      : request.headers.get("authorization");
-    const accessToken = authorization
-      ? authorization?.slice("Bearer ".length)
-      : url.searchParams.get("apiKey");
-
-    const scope = decodeURIComponent(
-      rows
-        ?.find((row) => row.startsWith("github_oauth_scope="))
-        ?.split("=")[1]
-        .trim() || "",
-    );
-
-    if (
-      url.pathname === "/dashboard" ||
-      (accessToken && !url.searchParams.get("home"))
-    ) {
-      return new Response(dashboard, {
-        headers: { "content-type": "text/html" },
+    if (url.searchParams.has("logout")) {
+      return new Response("Redirecting...", {
+        status: 302,
+        headers: {
+          Location: "/",
+          "Set-Cookie":
+            "authorization=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT, " +
+            "github_oauth_scope=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+        },
       });
     }
+
+    // Handle middleware/auth
+    const sponsorflare = middleware(request, env);
+    if (sponsorflare) return sponsorflare;
+
+    const response = await login.fetch(request, env);
+    if (response) return response;
+
+    // Check auth status
+    const cookie = request.headers.get("Cookie") || "";
+    const accessToken = cookie.includes("authorization=");
 
     return new Response(
       html`<!DOCTYPE html>
         <html lang="en" class="bg-slate-900">
           <head>
             <meta charset="utf8" />
-
             <script src="https://cdn.tailwindcss.com"></script>
             <title>
-              Monoflare - The Monorepo Solution For Cloudflare Microservices
+              Sponsorflare - Monetize Cloudflare Workers with GitHub Sponsors
             </title>
             <style>
               @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap");
-
               body {
                 font-family: "Inter", sans-serif;
               }
@@ -57,66 +52,96 @@ export default {
                 <h1
                   class="text-5xl font-bold mb-6 bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent"
                 >
-                  Monoflare
+                  Sponsorflare
                 </h1>
                 <p class="text-2xl text-slate-300 mb-8">
-                  The Monorepo Solution for Cloudflare Microservices
+                  Monetize Your Cloudflare Workers with GitHub Sponsors
                 </p>
                 <div class="flex justify-center gap-4">
-                  <a
-                    id="login"
-                    href="${accessToken
-                      ? "/dashboard"
-                      : "/login?scope=user:email,repo"}"
-                    class="bg-orange-500 hover:bg-orange-600 px-6 py-3 rounded-lg font-medium transition-colors"
-                  >
-                    ${accessToken ? "Dashboard" : "Login"}
-                  </a>
-                  <a
-                    href="https://github.com/janwilmake/monoflare"
-                    target="_blank"
-                    class="border border-orange-500 text-orange-500 px-6 py-3 rounded-lg font-medium hover:bg-orange-500/10 transition-colors"
-                  >
-                    View on GitHub
-                  </a>
+                  ${accessToken
+                    ? html`
+                        <a
+                          href="/?logout=true"
+                          class="bg-orange-500 hover:bg-orange-600 px-6 py-3 rounded-lg font-medium transition-colors"
+                        >
+                          Logout
+                        </a>
+                        <a
+                          href="https://github.com/sponsors/janwilmake"
+                          target="_blank"
+                          class="border border-orange-500 text-orange-500 px-6 py-3 rounded-lg font-medium hover:bg-orange-500/10 transition-colors"
+                        >
+                          Sponsor Me ➔
+                        </a>
+                      `
+                    : html`
+                        <a
+                          href="/login?scope=user:email"
+                          class="bg-orange-500 hover:bg-orange-600 px-6 py-3 rounded-lg font-medium transition-colors"
+                        >
+                          Login with GitHub
+                        </a>
+                        <a
+                          href="https://github.com/janwilmake/cloudflare-sponsorware"
+                          target="_blank"
+                          class="border border-orange-500 text-orange-500 px-6 py-3 rounded-lg font-medium hover:bg-orange-500/10 transition-colors"
+                        >
+                          View on GitHub
+                        </a>
+                      `}
                 </div>
               </div>
 
-              <!-- Features Grid -->
-              <div id="features" class="grid md:grid-cols-2 gap-8 mb-20">
-                <div class="bg-slate-800 p-8 rounded-xl">
-                  <h3 class="text-orange-400 text-xl font-semibold mb-4">
-                    Zero-Config Deployment
-                  </h3>
-                  <p class="text-slate-400">
-                    Single-file workers automatically become production-ready
-                    deployments with routing, security, and configurations
-                    generated for you.
-                  </p>
-                </div>
-
-                <div class="bg-slate-800 p-8 rounded-xl">
-                  <h3 class="text-orange-400 text-xl font-semibold mb-4">
-                    Smart Compilation
-                  </h3>
-                  <p class="text-slate-400">
-                    Automatic domain detection, dependency management, and
-                    environment variable injection - all from your TypeScript
-                    code.
-                  </p>
-                </div>
-
-                <div class="bg-slate-800 p-8 rounded-xl">
-                  <h3 class="text-orange-400 text-xl font-semibold mb-4">
-                    Unified Tooling
-                  </h3>
-                  <p class="text-slate-400">
-                    Manage KV stores, D1 databases, and Cloudflare APIs through
-                    standard TypeScript interfaces and automatic OpenAPI
-                    generation.
-                  </p>
-                </div>
-              </div>
+              ${accessToken
+                ? html`
+                    <!-- Dashboard Section -->
+                    <div class="bg-slate-800 p-8 rounded-xl text-center mb-12">
+                      <h2 class="text-2xl font-semibold mb-4">
+                        🎉 You're logged in!
+                      </h2>
+                      <p class="text-lg text-slate-400 mb-6">
+                        Your customer lifetime value:
+                        <span class="font-mono text-orange-400">$0.00</span>
+                        (TODO)
+                      </p>
+                      <p class="text-slate-500">
+                        Sponsor to increase your lifetime value and access
+                        premium features!
+                      </p>
+                    </div>
+                  `
+                : html`
+                    <!-- Features Grid -->
+                    <div class="grid md:grid-cols-3 gap-8 mb-20">
+                      <div class="bg-slate-800 p-8 rounded-xl">
+                        <h3 class="text-orange-400 text-xl font-semibold mb-4">
+                          ⚡️ Easy Integration
+                        </h3>
+                        <p class="text-slate-400">
+                          Add sponsor verification to your Workers with just a
+                          few lines of code.
+                        </p>
+                      </div>
+                      <div class="bg-slate-800 p-8 rounded-xl">
+                        <h3 class="text-orange-400 text-xl font-semibold mb-4">
+                          🔒 GitHub Sponsors
+                        </h3>
+                        <p class="text-slate-400">
+                          Leverage GitHub's sponsorship infrastructure for
+                          seamless monetization.
+                        </p>
+                      </div>
+                      <div class="bg-slate-800 p-8 rounded-xl">
+                        <h3 class="text-orange-400 text-xl font-semibold mb-4">
+                          💸 Flexible Limits
+                        </h3>
+                        <p class="text-slate-400">
+                          Control access based on lifetime sponsorship value
+                          with simple APIs.
+                        </p>
+                      </div>
+                    </div>
+                  `}
 
               <!-- Status Alert -->
               <div
@@ -129,13 +154,13 @@ export default {
                     />
                   </svg>
                   <div>
-                    <p class="font-medium">Early Development Preview</p>
+                    <p class="font-medium">Work in Progress</p>
                     <p class="text-sm text-amber-300/80">
-                      Follow our progress on
+                      Follow development on
                       <a
-                        href="https://x.com/janwilmake/status/1882815278557622711"
+                        href="https://github.com/janwilmake/cloudflare-sponsorware"
                         class="underline hover:text-amber-200"
-                        >Twitter</a
+                        >GitHub</a
                       >
                     </p>
                   </div>
@@ -146,7 +171,7 @@ export default {
               <div
                 class="text-center text-slate-500 border-t border-slate-800 pt-12"
               >
-                <p>Built with ❤️ for the Cloudflare ecosystem</p>
+                <p>Empowering Cloudflare Developers to Monetize Their Work</p>
               </div>
             </main>
           </body>
