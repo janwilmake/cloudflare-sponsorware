@@ -71,7 +71,3 @@ export default {
 6. Actually subscribe to watching sponsor events (via a waitUntil).
 7. Come up with datastructure for consistent storage. It needs `type Sponsors={source,ownerId,ownerLogin,clv,spent}` for the POC.
 8. Watch subscriber userId, and subscriber event, store total livetime value with money spent ensuring it makes sense. Keep that in a central KV that is reliable: we need probably D1 for consistency.
-
-https://docs.github.com/en/sponsors/integrating-with-github-sponsors/configuring-webhooks-for-events-in-your-sponsored-account
-
-https://docs.github.com/en/rest/using-the-rest-api/github-event-types?apiVersion=2022-11-28#sponsorshipevent
