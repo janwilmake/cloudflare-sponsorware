@@ -50,7 +50,8 @@ export default {
 
     // Do your worker thing!
     // and if you want to limit stuff...
-    const { ltv, spent } = await getLifetimeValue(request, env);
+    const { isAuthenticated, login, id, isSponsor, ltv, spent } =
+      await getSponsor(request, env);
     if (spent > ltv) {
       return new Response(
         "Payment required. Sponsor me! https://github.com/sponsors/janwilmake",
