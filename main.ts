@@ -2,22 +2,8 @@ import { Env, html, middleware } from "./sponsorflare";
 
 export default {
   fetch: async (request: Request, env: Env) => {
-    // Handle logout
-    const url = new URL(request.url);
-    if (url.searchParams.has("logout")) {
-      return new Response("Redirecting...", {
-        status: 302,
-        headers: {
-          Location: "/",
-          "Set-Cookie":
-            "authorization=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT, " +
-            "github_oauth_scope=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
-        },
-      });
-    }
-
     // Handle sponsorflare auth
-    const sponsorflare = middleware(request, env);
+    const sponsorflare = await middleware(request, env);
     if (sponsorflare) return sponsorflare;
 
     // Check auth status

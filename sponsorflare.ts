@@ -53,6 +53,18 @@ export const middleware = async (request: Request, env: Env) => {
 
   // Login page route
 
+  if (url.searchParams.has("logout")) {
+    return new Response("Redirecting...", {
+      status: 302,
+      headers: {
+        Location: "/",
+        "Set-Cookie":
+          "authorization=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT, " +
+          "github_oauth_scope=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+      },
+    });
+  }
+
   if (url.pathname === "/login") {
     const scope = url.searchParams.get("scope");
     const state = await generateRandomString(16);
@@ -189,7 +201,7 @@ export const middleware = async (request: Request, env: Env) => {
       return new Response("Redirecting", { status: 307, headers });
     } catch (error) {
       // Error handling
-
+      console.error("ERROR", error);
       return new Response(
         html`
           <!DOCTYPE html>
