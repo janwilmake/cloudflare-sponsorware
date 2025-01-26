@@ -19,7 +19,7 @@ Installation:
    2. add a secret that you save to `.dev.vars`
    3. content type: JSON
 5. run `npm i sponsorflare`
-6. run `npx wranger xxxxx` (create kv)
+6. run `npx wrangler d1 create sponsorflare` and put the result in wrangler.toml
 
 `wrangler.toml`:
 
@@ -27,6 +27,11 @@ Installation:
 [vars]
 GITHUB_REDIRECT_URI = "https://yourworkerdomain.com/callback"
 LOGIN_REDIRECT_URI = "/"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "sponsorflare"
+database_id = "your-id"
 ```
 
 `main.ts`:
@@ -35,7 +40,7 @@ LOGIN_REDIRECT_URI = "/"
 import { middleware, userPaid, getLifetimeValue } from "sponsorflare";
 
 type Env = {
-  sponsorflare: KVNamespace;
+  SPONSORFLARE: D1;
   GITHUB_WEBHOOK_SECRET: string;
   GITHUB_CLIENT_ID: string;
   GITHUB_CLIENT_SECRET: string;
@@ -62,7 +67,7 @@ export default {
 };
 ```
 
-## TODO
+## TODO POC (2025-01-26)
 
 1. ✅ Create a standalone repo called `cloudflare-sponsorware` that you can just use it with your app to allow for github login, github watching sponsorship events, and keeping the KV. people can use their own github acc and cloudflare acc for this. Open source.
 2. ✅ Buy sponsorflare.com and set up the repo and [tweet](https://x.com/janwilmake/status/1883493435635585198)
