@@ -67,7 +67,8 @@ export default {
 2. ✅ Buy sponsorflare.com and set up the repo and [tweet](https://x.com/janwilmake/status/1883493435635585198)
 3. ✅ Make sponsorflare github oauth work (took just 5 minutes!) and create indended demo-layout with Deepseek (took just 1 minute)
 4. ✅ Take a deep breath. Look into the apis and find which APIs and webhooks are needed (and validate this is even possible as the way I want it).
-5. Test out retrieving required information from a sponsor with matching userId.
-6. Actually subscribe to watching sponsor events (via a waitUntil).
-7. Come up with datastructure for consistent storage. It needs `type Sponsors={source,ownerId,ownerLogin,clv,spent}` for the POC.
-8. Watch subscriber userId, and subscriber event, store total livetime value with money spent ensuring it makes sense. Keep that in a central KV that is reliable: we need probably D1 for consistency.
+5. ✅ Test out retrieving required information from a sponsor with matching userId.
+6. ✅ Created getSponsors function.
+7. Create consistent storage: D1 with `type Sponsors={source,ownerId,ownerLogin,clv,spent}` for the POC.
+8. Watch sponsor event and when it happens, sync using `getSponsors` storing total livetime value with money spent ensuring it makes sense.
+9. Now I can make function `getSponsor(request,env,config?:{charge?:number})` that charges and/or gets clv/spent of the current request.

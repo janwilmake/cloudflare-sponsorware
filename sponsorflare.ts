@@ -31,6 +31,7 @@ export const middleware = async (request: Request, env: Env) => {
   const url = new URL(request.url);
 
   // Login page route
+
   if (url.pathname === "/login") {
     const scope = url.searchParams.get("scope");
     const state = await generateRandomString(16);

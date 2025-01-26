@@ -1,134 +1,144 @@
-interface GitHubGraphQLResponse<T> {
-  data?: T;
-  errors?: Array<{ message: string }>;
+interface Sponsor {
+  hasSponsorsListing: boolean;
+  isSponsoringViewer: boolean;
+  login?: string;
+  avatarUrl?: string;
+  bio?: string;
+  id?: string;
 }
 
-interface SponsorLifetimeValue {
+interface SponsorshipValueNode {
   amountInCents: number;
   formattedAmount: string;
+  sponsor: Sponsor;
 }
 
-interface UserSponsor {
-  login: string;
-  name?: string;
-  lifetimeReceivedSponsorshipValues: {
-    nodes: SponsorLifetimeValue[];
+interface SponsorshipConnection {
+  totalCount: number;
+  pageInfo: {
+    hasNextPage: boolean;
+    endCursor?: string;
   };
+  nodes: SponsorshipValueNode[];
 }
 
-interface OrganizationSponsor {
-  login: string;
-  name?: string;
-}
-
-type SponsorNode = (UserSponsor | OrganizationSponsor) & {
-  __typename?: string;
-};
-
-interface Viewer {
+interface ViewerData {
   monthlyEstimatedSponsorsIncomeInCents: number;
-  lifetimeReceivedSponsorshipValues: {
-    totalCount: number;
-    nodes: SponsorLifetimeValue[];
-  };
-  sponsors: {
-    totalCount: number;
-    pageInfo: {
-      hasNextPage: boolean;
-      endCursor?: string;
-    };
-    nodes: SponsorNode[];
-  };
   avatarUrl: string;
   login: string;
+  sponsorCount: number;
+  sponsors: {
+    amountInCents: number;
+    formattedAmount: string;
+    hasSponsorsListing: boolean;
+    isSponsoringViewer: boolean;
+    login?: string;
+    avatarUrl?: string;
+    bio?: string;
+    id?: string;
+  }[];
 }
 
-async function fetchSponsorData(token: string): Promise<Viewer> {
-  const query = `
-      query {
-        viewer {
-          monthlyEstimatedSponsorsIncomeInCents
-          lifetimeReceivedSponsorshipValues(first: 100) {
-            totalCount
-            nodes {
-              amountInCents
-              formattedAmount
-            }
-          }
-          sponsors(first: 100) {
-            totalCount
-            pageInfo {
-              hasNextPage
-              endCursor
-            }
-            nodes {
-              ... on User {
-                login
-                name
-                lifetimeReceivedSponsorshipValues {
-                  nodes {
-                    amountInCents
-                    formattedAmount
+export async function fetchAllSponsorshipData(
+  accessToken: string,
+): Promise<ViewerData> {
+  const endpoint = "https://api.github.com/graphql";
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+  };
+
+  let afterCursor: string | null = null;
+  let hasNextPage = false;
+  let totalCount = 0;
+  const allNodes: SponsorshipValueNode[] = [];
+  let monthlyIncome = 0;
+  let avatarUrl = "";
+  let login = "";
+
+  do {
+    const query = `
+        query ($first: Int, $after: String) {
+          viewer {
+            monthlyEstimatedSponsorsIncomeInCents
+            lifetimeReceivedSponsorshipValues(first: $first, after: $after) {
+              totalCount
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
+              nodes {
+                amountInCents
+                formattedAmount
+                sponsor {
+                  ... on User {
+                    login
+                    avatarUrl
+                    bio
+                    id
                   }
+                  hasSponsorsListing
+                  isSponsoringViewer
                 }
               }
-              ... on Organization {
-                login
-                name
-              }
             }
+            avatarUrl
+            login
           }
-          avatarUrl
-          login
         }
-      }
-    `;
+      `;
 
-  const response = await fetch("https://api.github.com/graphql", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ query }),
-  });
+    const variables = {
+      first: 100,
+      after: afterCursor,
+    };
 
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
-  }
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ query, variables }),
+    });
 
-  const result: GitHubGraphQLResponse<{ viewer: Viewer }> =
-    await response.json();
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
 
-  if (result.errors) {
-    throw new Error(result.errors.map((error) => error.message).join("\n"));
-  }
+    const result: any = await response.json();
 
-  if (!result.data) {
-    throw new Error("No data received from GitHub API");
-  }
+    if (result.errors) {
+      throw new Error(`GraphQL error: ${JSON.stringify(result.errors)}`);
+    }
 
-  return result.data.viewer;
+    const viewer = result.data?.viewer;
+    if (!viewer) {
+      throw new Error("No viewer data found");
+    }
+
+    const sponsorshipValues = viewer.lifetimeReceivedSponsorshipValues;
+
+    // Capture metadata from first response
+    if (totalCount === 0) {
+      totalCount = sponsorshipValues.totalCount;
+      monthlyIncome = viewer.monthlyEstimatedSponsorsIncomeInCents;
+      avatarUrl = viewer.avatarUrl;
+      login = viewer.login;
+    }
+
+    allNodes.push(...sponsorshipValues.nodes);
+    hasNextPage = sponsorshipValues.pageInfo.hasNextPage;
+    afterCursor = sponsorshipValues.pageInfo.endCursor || null;
+  } while (hasNextPage);
+
+  return {
+    monthlyEstimatedSponsorsIncomeInCents: monthlyIncome,
+    avatarUrl,
+    login,
+    sponsorCount: totalCount,
+    sponsors: allNodes.map(({ sponsor, ...rest }) => ({ ...rest, ...sponsor })),
+  };
 }
 
-// Usage example:
-const GITHUB_TOKEN = "your_github_token_here";
-
-fetchSponsorData(GITHUB_TOKEN)
-  .then((data) => {
-    console.log("Monthly income:", data.monthlyEstimatedSponsorsIncomeInCents);
-    console.log("Total sponsors:", data.sponsors.totalCount);
-
-    data.sponsors.nodes.forEach((sponsor) => {
-      if ("lifetimeReceivedSponsorshipValues" in sponsor) {
-        console.log(
-          `User sponsor: ${sponsor.login}`,
-          "Lifetime value:",
-          sponsor.lifetimeReceivedSponsorshipValues.nodes,
-        );
-      } else {
-        console.log(`Organization sponsor: ${sponsor.login}`);
-      }
-    });
-  })
-  .catch((error) => console.error("Error:", error.message));
+// its working!
+// fetchAllSponsorshipData("").then(
+//   (res) => console.dir(res, { depth: 999 }),
+// );
