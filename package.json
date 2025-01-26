@@ -1,6 +1,7 @@
 {
   "name": "sponsorflare",
   "version": "0.0.1",
+  "main": "sponsorflare.ts",
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250124.3"
   }

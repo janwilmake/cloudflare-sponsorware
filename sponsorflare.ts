@@ -2,6 +2,142 @@ declare global {
   var env: Env;
 }
 
+interface SponsorNode {
+  hasSponsorsListing: boolean;
+  isSponsoringViewer: boolean;
+  login?: string;
+  avatarUrl?: string;
+  bio?: string;
+  id?: string;
+}
+
+interface SponsorshipValueNode {
+  amountInCents: number;
+  formattedAmount: string;
+  sponsor: SponsorNode;
+}
+
+interface ViewerData {
+  monthlyEstimatedSponsorsIncomeInCents: number;
+  avatarUrl: string;
+  login: string;
+  sponsorCount: number;
+  sponsors: {
+    amountInCents: number;
+    formattedAmount: string;
+    hasSponsorsListing: boolean;
+    isSponsoringViewer: boolean;
+    login?: string;
+    avatarUrl?: string;
+    bio?: string;
+    id?: string;
+  }[];
+}
+
+export async function fetchAllSponsorshipData(
+  accessToken: string,
+): Promise<ViewerData> {
+  const endpoint = "https://api.github.com/graphql";
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    "Content-Type": "application/json",
+  };
+
+  let afterCursor: string | null = null;
+  let hasNextPage = false;
+  let totalCount = 0;
+  const allNodes: SponsorshipValueNode[] = [];
+  let monthlyIncome = 0;
+  let avatarUrl = "";
+  let login = "";
+
+  do {
+    const query = `
+        query ($first: Int, $after: String) {
+          viewer {
+            monthlyEstimatedSponsorsIncomeInCents
+            lifetimeReceivedSponsorshipValues(first: $first, after: $after) {
+              totalCount
+              pageInfo {
+                hasNextPage
+                endCursor
+              }
+              nodes {
+                amountInCents
+                formattedAmount
+                sponsor {
+                  ... on User {
+                    login
+                    avatarUrl
+                    bio
+                    id
+                  }
+                  hasSponsorsListing
+                  isSponsoringViewer
+                }
+              }
+            }
+            avatarUrl
+            login
+          }
+        }
+      `;
+
+    const variables = {
+      first: 100,
+      after: afterCursor,
+    };
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ query, variables }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result: any = await response.json();
+
+    if (result.errors) {
+      throw new Error(`GraphQL error: ${JSON.stringify(result.errors)}`);
+    }
+
+    const viewer = result.data?.viewer;
+    if (!viewer) {
+      throw new Error("No viewer data found");
+    }
+
+    const sponsorshipValues = viewer.lifetimeReceivedSponsorshipValues;
+
+    // Capture metadata from first response
+    if (totalCount === 0) {
+      totalCount = sponsorshipValues.totalCount;
+      monthlyIncome = viewer.monthlyEstimatedSponsorsIncomeInCents;
+      avatarUrl = viewer.avatarUrl;
+      login = viewer.login;
+    }
+
+    allNodes.push(...sponsorshipValues.nodes);
+    hasNextPage = sponsorshipValues.pageInfo.hasNextPage;
+    afterCursor = sponsorshipValues.pageInfo.endCursor || null;
+  } while (hasNextPage);
+
+  return {
+    monthlyEstimatedSponsorsIncomeInCents: monthlyIncome,
+    avatarUrl,
+    login,
+    sponsorCount: totalCount,
+    sponsors: allNodes.map(({ sponsor, ...rest }) => ({ ...rest, ...sponsor })),
+  };
+}
+
+// its working!
+// fetchAllSponsorshipData("").then(
+//   (res) => console.dir(res, { depth: 999 }),
+// );
+
 export const html = (strings: TemplateStringsArray, ...values: any[]) => {
   return strings.reduce(
     (result, str, i) => result + str + (values[i] || ""),
@@ -22,17 +158,17 @@ export interface Env {
 /** Datastructure of a github user - this is what's consistently stored in the SPONSORFLARE D1 database */
 export type Sponsor = {
   /** whether or not the sponsor has ever authenticated anywhere */
-  isAuthenticated?: boolean;
+  is_authenticated?: boolean;
   /** url where the user first authenticated */
   source?: string;
   /** node id of the user */
-  ownerId: string;
+  owner_id: string;
   /** github username */
-  ownerLogin: string;
+  owner_login: string;
   /** github avatar url */
-  avatarUrl?: string;
+  avatar_url?: string;
   /** true if the user has ever sponsored */
-  isSponsor?: boolean;
+  is_sponsor?: boolean;
   /** total money the user has paid, in cents */
   clv?: number;
   /** total money spent on behalf of the user (if tracked), in cents */
@@ -145,39 +281,29 @@ export const middleware = async (request: Request, env: Env) => {
       if (!userResponse.ok) throw new Error("Failed to fetch user info");
       const userData: any = await userResponse.json();
 
-      // Ensure sponsors table exists
-      await env.SPONSORFLARE.exec(`
-          CREATE TABLE IF NOT EXISTS sponsors (
-            ownerId TEXT PRIMARY KEY,
-            ownerLogin TEXT NOT NULL,
-            avatarUrl TEXT,
-            isAuthenticated BOOLEAN NOT NULL DEFAULT FALSE,
-            source TEXT,
-            isSponsor BOOLEAN NOT NULL DEFAULT FALSE,
-            clv INTEGER DEFAULT 0,
-            spent INTEGER DEFAULT 0
-          );
-        `);
-
-      // Insert or update sponsor record
-      const stmt = env.SPONSORFLARE.prepare(
-        `
-          INSERT INTO sponsors (ownerId, ownerLogin, avatarUrl, isAuthenticated, source)
-          VALUES (?1, ?2, ?3, TRUE, ?4)
-          ON CONFLICT(ownerId) DO UPDATE SET
-            isAuthenticated = TRUE,
-            avatarUrl = ?3,
-            ownerLogin = ?2
-        `,
-      ).bind(
-        userData.id.toString(), // Ensure ownerId is a string
-        userData.login,
-        userData.avatar_url,
-        url.origin, // Source is the origin where the user authenticated
+      // Ensure sponsors table exists with SQLite-compatible schema
+      await env.SPONSORFLARE.exec(
+        `CREATE TABLE IF NOT EXISTS sponsors (owner_id TEXT PRIMARY KEY, owner_login TEXT NOT NULL, avatar_url TEXT, is_authenticated INTEGER DEFAULT 0, source TEXT, is_sponsor INTEGER DEFAULT 0, clv INTEGER DEFAULT 0, spent INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);`,
       );
 
-      const res = await stmt.run();
-      console.log({ res });
+      // Upsert operation using SQLite-compatible boolean handling
+      const stmt = env.SPONSORFLARE.prepare(
+        `
+    INSERT INTO sponsors (owner_id, owner_login, avatar_url, is_authenticated, source)
+    VALUES (?1, ?2, ?3, 1, ?4)
+    ON CONFLICT(owner_id) DO UPDATE SET
+      is_authenticated = 1,
+      avatar_url = excluded.avatar_url,
+      owner_login = excluded.owner_login
+  `,
+      ).bind(
+        userData.id.toString(),
+        userData.login,
+        userData.avatar_url,
+        url.origin,
+      );
+
+      await stmt.run();
 
       const headers = new Headers({
         Location: url.origin + (env.LOGIN_REDIRECT_URI || "/"),

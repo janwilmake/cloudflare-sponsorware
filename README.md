@@ -75,6 +75,8 @@ export default {
 4. ✅ Take a deep breath. Look into the apis and find which APIs and webhooks are needed (and validate this is even possible as the way I want it).
 5. ✅ Test out retrieving required information from a sponsor with matching userId.
 6. ✅ Created getSponsors function.
-7. Create consistent storage: D1 with `type Sponsors={source,ownerId,ownerLogin,clv,spent}` for the POC.
-8. Watch sponsor event and when it happens, sync using `getSponsors` storing total livetime value with money spent ensuring it makes sense.
-9. Now I can make function `getSponsor(request,env,config?:{charge?:number})` that charges and/or gets clv/spent of the current request.
+7. ✅ Create consistent storage: D1 with `type Sponsors={source,ownerId,ownerLogin,clv,spent}` for the POC.
+8. ✅ Upsert user upon login
+9. Ensure webhooks get delivered (https://docs.github.com/en/webhooks/using-webhooks/handling-webhook-deliveries)
+10. Upsert user upon webhook: sync using `getSponsors` storing total livetime value with money spent ensuring it makes sense.
+11. Now I can make function `getSponsor(request,env,config?:{charge?:number})` that charges and/or gets clv/spent of the current request.

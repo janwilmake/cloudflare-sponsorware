@@ -1,4 +1,4 @@
-import { events, EventType, getOwner } from "./types";
+import { Env } from "./sponsorflare";
 
 let encoder = new TextEncoder();
 
@@ -59,9 +59,9 @@ X-GitHub-Hook-Installation-Target-ID: The unique identifier of the resource wher
 
 To see what each header might look like in a webhook payload, see "Example webhook delivery."*/
 
-export const githubWebhook = async (request: Request, env: any) => {
+export const githubWebhook = async (request: Request, env: Env) => {
   console.log("ENTERED GITHUB WEBHOOK");
-  const event = request.headers.get("X-GitHub-Event") as EventType | null;
+  const event = request.headers.get("X-GitHub-Event") as string | null;
   const secret = env.GITHUB_WEBHOOK_SECRET;
   if (!secret) {
     return new Response("No GITHUB_WEBHOOK_SECRET found", {
@@ -69,7 +69,7 @@ export const githubWebhook = async (request: Request, env: any) => {
     });
   }
 
-  if (!event || !events.includes(event)) {
+  if (!event) {
     console.log("Event not allowed:" + event);
 
     return new Response("Event not allowed:" + event, {
