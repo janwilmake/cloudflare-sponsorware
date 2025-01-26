@@ -358,6 +358,18 @@ export const middleware = async (request: Request, env: Env) => {
   }
 };
 
-export const getLifetimeValue = (request: Request, env: Env) => {
+export const getSponsor = async (
+  request: Request,
+  env: Env,
+  config?: { charge: number },
+): Promise<{
+  is_authenticated: boolean;
+  owner_login?: string;
+  owner_id?: string;
+  is_sponsor?: boolean;
+  ltv?: number;
+  spent?: number;
+  charged: boolean;
+}> => {
   return {};
 };

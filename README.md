@@ -29,7 +29,7 @@ GITHUB_REDIRECT_URI = "https://yourworkerdomain.com/callback"
 LOGIN_REDIRECT_URI = "/"
 
 [[d1_databases]]
-binding = "DB"
+binding = "SPONSORFLARE"
 database_name = "sponsorflare"
 database_id = "your-id"
 ```
@@ -54,10 +54,13 @@ export default {
     if (sponsorflare) return middleware;
 
     // Do your worker thing!
-    // and if you want to limit stuff...
-    const { isAuthenticated, login, id, isSponsor, ltv, spent } =
-      await getSponsor(request, env);
-    if (!isSponsor || spent > ltv) {
+    // And if you want to limit stuff...
+    // This is a super fast function that just
+    // does 2 read queries to the D1 and a write if charging
+    const { isAuthenticated, login, id, isSponsor, ltv, spent, charged } =
+      await getSponsor(request, env, { charge: 0.01 });
+
+    if (!charged) {
       return new Response(
         "Payment required. Sponsor me! https://github.com/sponsors/janwilmake",
         { status: 402 },
@@ -79,4 +82,5 @@ export default {
 8. ✅ Upsert user upon login
 9. Ensure webhooks get delivered (https://docs.github.com/en/webhooks/using-webhooks/handling-webhook-deliveries)
 10. Upsert user upon webhook: sync using `getSponsors` storing total livetime value with money spent ensuring it makes sense.
-11. Now I can make function `getSponsor(request,env,config?:{charge?:number})` that charges and/or gets clv/spent of the current request.
+11. Create access_tokens table that maps (encrypted hash of) access_token to sponsorid
+12. Now I can make function `getSponsor(request,env,config?:{charge?:number})` that charges and/or gets clv/spent of the current request.
