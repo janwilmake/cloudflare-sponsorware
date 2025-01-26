@@ -2,6 +2,8 @@
 
 Inspired by [sponsorware](https://github.com/sponsorware/docs) and [this blog](https://calebporzio.com/sponsorware), sponsorflare aims allowing for [cloudflare workers](https://workers.cloudflare.com) monetisation in a few lines of code.
 
+![](flow.drawio.png)
+
 > [!NOTE]
 > This is a work in progress
 
