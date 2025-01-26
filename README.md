@@ -7,6 +7,23 @@ Inspired by [sponsorware](https://github.com/sponsorware/docs) and [this blog](h
 
 ## Intended usage
 
+Installation:
+
+1. run `npm i sponsorflare`
+2. create a github oauth client at https://github.com/settings/applications/new with the right redirect URI, and get the client ID and secret
+3. run `cp .dev.vars.example .dev.vars`
+4. run `npx wranger xxxxx` (create kv)
+
+`wrangler.toml`:
+
+```toml
+[vars]
+GITHUB_REDIRECT_URI = "https://yourworkerdomain.com/callback"
+LOGIN_REDIRECT_URI = "/"`
+```
+
+`main.ts`:
+
 ```ts
 import { middleware, userPaid, getLifetimeValue } from "sponsorflare";
 
@@ -42,7 +59,7 @@ export default {
 2. ✅ Buy sponsorflare.com and set up the repo and [tweet](https://x.com/janwilmake/status/1883493435635585198)
 3. ✅ Make sponsorflare github oauth work (took just 5 minutes!) and create indended demo-layout with Deepseek (took just 1 minute)
 4. Take a deep breath
-5. Actually subscribe to watching sponsor events (via a waituntil).
+5. Actually subscribe to watching sponsor events (via a waitUntil).
 6. Come up with datastructure for consistent storage. It needs `type Sponsors={source,ownerId,ownerLogin,clv,spent}` for the POC.
 7. Watch subscriber userId, and subscriber event, store total livetime value with money spent ensuring it makes sense. Keep that in a central KV that is reliable: we need probably D1 for consistency.
 
