@@ -1,5 +1,4 @@
-import { middleware, getLifetimeValue } from "./mod";
-import login, { Env, html } from "./github-login";
+import { Env, html, middleware } from "./sponsorflare";
 
 export default {
   fetch: async (request: Request, env: Env) => {
@@ -17,12 +16,9 @@ export default {
       });
     }
 
-    // Handle middleware/auth
+    // Handle sponsorflare auth
     const sponsorflare = middleware(request, env);
     if (sponsorflare) return sponsorflare;
-
-    const response = await login.fetch(request, env);
-    if (response) return response;
 
     // Check auth status
     const cookie = request.headers.get("Cookie") || "";
