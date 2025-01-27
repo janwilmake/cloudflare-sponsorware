@@ -80,7 +80,7 @@ export default {
 6. ✅ Created getSponsors function.
 7. ✅ Create consistent storage: D1 with `type Sponsors={source,ownerId,ownerLogin,clv,spent}` for the POC.
 8. ✅ Upsert user upon login
-9. Ensure webhooks get delivered (https://docs.github.com/en/webhooks/using-webhooks/handling-webhook-deliveries)
-10. Upsert user upon webhook: sync using `getSponsors` storing total livetime value with money spent ensuring it makes sense.
-11. Create `access_tokens` table that maps (encrypted hash of) `access_token` to `sponsorid`
-12. Now I can make function `getSponsor(request,env,config?:{charge?:number})` that charges and/or gets clv/spent of the current request.
+9. ✅ Ensure webhooks get delivered (https://docs.github.com/en/webhooks/using-webhooks/handling-webhook-deliveries)
+10. ✅ Upsert user upon webhook: sync using `getSponsors` storing total livetime value with money spent ensuring it makes sense.
+11. ✅ Create `access_tokens` table that maps `access_token` to `sponsorid`
+12. ✅ Now I can make function `getSponsor(request,env,config?:{charge?:number})` that charges and/or gets clv/spent of the current request.
