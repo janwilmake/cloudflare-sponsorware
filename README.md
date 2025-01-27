@@ -66,6 +66,7 @@ This implementation uses a [Cloudflare Durable Object](https://developers.cloudf
 
 - When the user doesn't have any 'authorization' cookies, the request takes anywhere between 25-120ms (normal for a worker)
 - When the user is authorized and we need to charge them, the request takes anywhere between 50-120ms because it needs to do an extra request between the worker and the DO (not much slower!)
+- If we would've used a regular D1 database (or another consistent one, which requires it to be global) the request would take anywhere between 230ms and 1000ms, depending on where it is coming from (not measured much). Much slower!
 
 This design pattern of a DO per user can be expanded to store more state for a user. If you don't have too many logic that connacts many different users and their state in your worker/app, it allows for stateful apps without having a central database!
 
