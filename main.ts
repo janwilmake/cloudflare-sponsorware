@@ -62,6 +62,12 @@ export default {
                         >
                           Sponsor Me ➔
                         </a>
+                        <a
+                          href="/readme"
+                          class="border border-orange-500 text-orange-500 px-6 py-3 rounded-lg font-medium hover:bg-orange-500/10 transition-colors"
+                        >
+                          About
+                        </a>
                       `
                     : html`
                         <a
@@ -76,6 +82,12 @@ export default {
                           class="border border-orange-500 text-orange-500 px-6 py-3 rounded-lg font-medium hover:bg-orange-500/10 transition-colors"
                         >
                           View on GitHub
+                        </a>
+                        <a
+                          href="/readme"
+                          class="border border-orange-500 text-orange-500 px-6 py-3 rounded-lg font-medium hover:bg-orange-500/10 transition-colors"
+                        >
+                          About
                         </a>
                       `}
                 </div>
@@ -152,30 +164,6 @@ export default {
                       </div>
                     </div>
                   `}
-
-              <!-- Status Alert -->
-              <div
-                class="bg-amber-900/30 border border-amber-800 rounded-lg p-6 mb-12"
-              >
-                <div class="flex items-center gap-4 text-amber-400">
-                  <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
-                    <path
-                      d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zm0 16a3 3 0 01-3-3h6a3 3 0 01-3 3z"
-                    />
-                  </svg>
-                  <div>
-                    <p class="font-medium">Work in Progress</p>
-                    <p class="text-sm text-amber-300/80">
-                      Follow development on
-                      <a
-                        href="https://github.com/janwilmake/cloudflare-sponsorware"
-                        class="underline hover:text-amber-200"
-                        >GitHub</a
-                      >
-                    </p>
-                  </div>
-                </div>
-              </div>
 
               <!-- Footer -->
               <div

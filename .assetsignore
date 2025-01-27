@@ -1,0 +1,10 @@
+.github
+.wrangler
+build
+node_modules
+.git
+.dev.vars
+.dev.vars.example
+.gitignore
+*.ts
+*.json

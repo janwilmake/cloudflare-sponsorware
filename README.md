@@ -60,7 +60,18 @@ export default {
 };
 ```
 
-## TODO POC (2025-01-26)
+## How does it work?
+
+This implementation uses a [Cloudflare Durable Object](https://developers.cloudflare.com/durable-objects/) for each user, to store their charges in their own database. Because of this, the charging happens at the location near to where the worker is executing the request, and it's incredibly fast.
+
+- When the user doesn't have any 'authorization' cookies, the request takes anywhere between 25-120ms (normal for a worker)
+- When the user is authorized and we need to charge them, the request takes anywhere between 50-120ms because it needs to do an extra request between the worker and the DO (not much slower!)
+
+This design pattern of a DO per user can be expanded to store more state for a user. If you don't have too many logic that connacts many different users and their state in your worker/app, it allows for stateful apps without having a central database!
+
+## CHANGELOG
+
+### Creating the POC (2025-01-26)
 
 1. ✅ Create a standalone repo called `cloudflare-sponsorware` that you can just use it with your app to allow for github login, github watching sponsorship events, and keeping the KV. people can use their own github acc and cloudflare acc for this. Open source.
 2. ✅ Buy sponsorflare.com and set up the repo and [tweet](https://x.com/janwilmake/status/1883493435635585198)
@@ -79,7 +90,7 @@ Yeah! The Proof of Concept is out there. You can choose to simply use it by inst
 
 ![](poc.png)
 
-# Update 2025-01-27
+### Moving from a single D1 SQLite DB to a durable object per user! (2025-01-27)
 
 I learned that we can improve latency by using user-based DOs rather than a globally central database. This has a side-effect that we can't recall all active users, but that's also not something we need!
 
