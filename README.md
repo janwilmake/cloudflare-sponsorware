@@ -84,3 +84,7 @@ export default {
 10. ✅ Upsert user upon webhook: sync using `getSponsors` storing total livetime value with money spent ensuring it makes sense.
 11. ✅ Create `access_tokens` table that maps `access_token` to `sponsorid`
 12. ✅ Now I can make function `getSponsor(request,env,config?:{charge?:number})` that charges and/or gets clv/spent of the current request.
+
+Yeah! The Proof of Concept is out there. You can choose to simply use it by installing the package, or use it as a template and build it out further if you so desire. I'm going to be using this for most of my products.
+
+![](poc.png)
