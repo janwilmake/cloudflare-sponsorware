@@ -4,10 +4,7 @@ Inspired by [sponsorware](https://github.com/sponsorware/docs) and [this blog](h
 
 ![](flow.drawio.png)
 
-> [!NOTE]
-> This is a work in progress
-
-## Intended usage
+## Usage
 
 Installation:
 
@@ -37,7 +34,7 @@ database_id = "your-id"
 `main.ts`:
 
 ```typescript
-import { middleware, userPaid, getLifetimeValue } from "sponsorflare";
+import { middleware, getSponsor } from "sponsorflare";
 
 type Env = {
   SPONSORFLARE: D1;
@@ -57,8 +54,9 @@ export default {
     // And if you want to limit stuff...
     // This is a super fast function that just
     // does 2 read queries to the D1 and a write if charging
-    const { isAuthenticated, login, id, isSponsor, ltv, spent, charged } =
-      await getSponsor(request, env, { charge: 0.01 });
+    const { isAuthenticated, charged } = await getSponsor(request, env, {
+      charge: 1,
+    });
 
     if (!charged) {
       return new Response(
@@ -66,6 +64,8 @@ export default {
         { status: 402 },
       );
     }
+
+    // Do your paid stuff here after charging the user
   },
 };
 ```
