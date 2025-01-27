@@ -72,20 +72,26 @@ This design pattern of a DO per user can be expanded to store more state for a u
 
 ## CHANGELOG
 
+## 2025-01-25
+
+Built oauth github-login in a secure way! finally! one file way of doing this in a worker that is easily copy-paste-able. Great!
+
 ### Creating the POC (2025-01-26)
 
-1. ✅ Create a standalone repo called `cloudflare-sponsorware` that you can just use it with your app to allow for github login, github watching sponsorship events, and keeping the KV. people can use their own github acc and cloudflare acc for this. Open source.
-2. ✅ Buy sponsorflare.com and set up the repo and [tweet](https://x.com/janwilmake/status/1883493435635585198)
-3. ✅ Make sponsorflare github oauth work (took just 5 minutes!) and create indended demo-layout with Deepseek (took just 1 minute)
-4. ✅ Take a deep breath. Look into the apis and find which APIs and webhooks are needed (and validate this is even possible as the way I want it).
-5. ✅ Test out retrieving required information from a sponsor with matching userId.
-6. ✅ Created getSponsors function.
-7. ✅ Create consistent storage: D1 with `type Sponsors={source,ownerId,ownerLogin,clv,spent}` for the POC.
-8. ✅ Upsert user upon login
-9. ✅ Ensure webhooks get delivered (https://docs.github.com/en/webhooks/using-webhooks/handling-webhook-deliveries)
-10. ✅ Upsert user upon webhook: sync using `getSponsors` storing total livetime value with money spent ensuring it makes sense.
-11. ✅ Create `access_tokens` table that maps `access_token` to `sponsorid`
-12. ✅ Now I can make function `getSponsor(request,env,config?:{charge?:number})` that charges and/or gets clv/spent of the current request.
+1. Built https://github.com/janwilmake/xlogin
+2. Decided Sponsorware is the GOAT. https://github.com/sponsorware/docs
+3. ✅ Create a standalone repo called `cloudflare-sponsorware` that you can just use it with your app to allow for github login, github watching sponsorship events, and keeping the KV. people can use their own github acc and cloudflare acc for this. Open source.
+4. ✅ Buy sponsorflare.com and set up the repo and [tweet](https://x.com/janwilmake/status/1883493435635585198)
+5. ✅ Make sponsorflare github oauth work (took just 5 minutes!) and create indended demo-layout with Deepseek (took just 1 minute)
+6. ✅ Take a deep breath. Look into the apis and find which APIs and webhooks are needed (and validate this is even possible as the way I want it).
+7. ✅ Test out retrieving required information from a sponsor with matching userId.
+8. ✅ Created getSponsors function.
+9. ✅ Create consistent storage: D1 with `type Sponsors={source,ownerId,ownerLogin,clv,spent}` for the POC.
+10. ✅ Upsert user upon login
+11. ✅ Ensure webhooks get delivered (https://docs.github.com/en/webhooks/using-webhooks/handling-webhook-deliveries)
+12. ✅ Upsert user upon webhook: sync using `getSponsors` storing total livetime value with money spent ensuring it makes sense.
+13. ✅ Create `access_tokens` table that maps `access_token` to `sponsorid`
+14. ✅ Now I can make function `getSponsor(request,env,config?:{charge?:number})` that charges and/or gets clv/spent of the current request.
 
 Yeah! The Proof of Concept is out there. You can choose to simply use it by installing the package, or use it as a template and build it out further if you so desire. I'm going to be using this for most of my products.
 
@@ -118,3 +124,7 @@ After this, I added one more measure for security, namely an idempotency key to 
 There is no way possible to get an overview of all users with this implementation, and we also don't have a way to back up the data! Nevertheless, this is a very powerful way to charge people for using workers, and DO's should be sufficiently reliable to handle this usecase, I think.
 
 Because we're not using a global database but a separate database per user, the response latency is incredibly low! This is because a DO always spawns as nearby the worker as possible, and stays there.
+
+## TODO
+
+- To list all items in the namespace, we can use either https://developers.cloudflare.com/api/resources/durable_objects/subresources/namespaces/subresources/objects/methods/list/ or we could add a master DO that keeps track of it.

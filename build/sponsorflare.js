@@ -1,3 +1,83 @@
+export class SponsorDO {
+    state;
+    storage;
+    constructor(state) {
+        this.state = state;
+        this.storage = state.storage;
+    }
+    async fetch(request) {
+        const url = new URL(request.url);
+        // Handle different operations based on the path
+        switch (url.pathname) {
+            case "/initialize":
+                const initData = await request.json();
+                const already = await this.storage.get("sponsor", {
+                    noCache: true,
+                });
+                await this.storage.put("sponsor", {
+                    ...(already || {}),
+                    ...initData.sponsor,
+                }, { noCache: true, allowUnconfirmed: false });
+                if (initData.access_token) {
+                    await this.storage.put(initData.access_token, initData.scope);
+                }
+                return new Response("Initialized", { status: 200 });
+            case "/verify":
+                const access_token = url.searchParams.get("token");
+                const hasToken = await this.storage.get(access_token);
+                if (!hasToken) {
+                    return new Response("Invalid token", { status: 401 });
+                }
+                const sponsor = await this.storage.get("sponsor");
+                return new Response(JSON.stringify(sponsor), {
+                    status: 200,
+                    headers: { "Content-Type": "application/json" },
+                });
+            case "/charge":
+                const chargeAmount = Number(url.searchParams.get("amount"));
+                const idempotencyKey = url.searchParams.get("idempotency_key");
+                if (!idempotencyKey) {
+                    return new Response("Idempotency key required", { status: 400 });
+                }
+                const chargeKey = `charge.${idempotencyKey}`;
+                const existingCharge = await this.storage.get(chargeKey);
+                if (existingCharge) {
+                    return new Response(JSON.stringify({
+                        message: "Charge already processed",
+                        charge: existingCharge,
+                    }), {
+                        status: 200,
+                        headers: { "Content-Type": "application/json" },
+                    });
+                }
+                const sponsor_data = await this.storage.get("sponsor");
+                if (!sponsor_data) {
+                    return new Response("Sponsor not found", { status: 404 });
+                }
+                const updated = {
+                    ...sponsor_data,
+                    spent: (sponsor_data.spent || 0) + chargeAmount,
+                };
+                await this.storage.put("sponsor", updated);
+                // Record the charge with timestamp
+                await this.storage.put(chargeKey, {
+                    amount: chargeAmount,
+                    timestamp: Date.now(),
+                });
+                return new Response(JSON.stringify(updated), {
+                    status: 200,
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Cache-Control": "no-store, no-cache, must-revalidate",
+                        Pragma: "no-cache",
+                        Expires: "0",
+                    },
+                });
+            default:
+                return new Response("Not found", { status: 404 });
+        }
+    }
+}
 export async function fetchAllSponsorshipData(accessToken) {
     const endpoint = "https://api.github.com/graphql";
     const headers = {
@@ -172,41 +252,35 @@ export const middleware = async (request, env) => {
             });
         }
         const sponsorshipData = await fetchAllSponsorshipData(env.GITHUB_PAT);
-        // Prepare batch upsert statements
-        const statements = sponsorshipData.sponsors.map((sponsor) => {
-            return env.SPONSORFLARE.prepare(`INSERT INTO sponsors (
-      owner_id, 
-      owner_login, 
-      avatar_url, 
-      is_sponsor, 
-      clv, 
-      source
-    ) VALUES (?, ?, ?, ?, ?, ?)
-    ON CONFLICT(owner_id) DO UPDATE SET
-      owner_login = excluded.owner_login,
-      avatar_url = excluded.avatar_url,
-      is_sponsor = excluded.is_sponsor,
-      clv = excluded.clv`).bind(sponsor.id, sponsor.login, sponsor.avatarUrl, 1, sponsor.amountInCents, "github");
-        });
-        // Execute all statements in a batch
-        await env.SPONSORFLARE.batch(statements);
-        const currentSponsorIds = sponsorshipData.sponsors
-            .map((s) => s.id)
-            .filter((id) => !!id)
-            .map((x) => x);
-        //TODO: input this into the db:  env.SPONSORFLARE.prepare(``)
-        if (currentSponsorIds.length > 0) {
-            // Update existing records not in current list
-            await env.SPONSORFLARE.prepare(`UPDATE sponsors
-         SET is_sponsor = 0
-         WHERE owner_id NOT IN (${currentSponsorIds.map(() => "?").join(",")})`)
-                .bind(...currentSponsorIds)
-                .run();
+        // Create promises array for all updates
+        const updatePromises = [];
+        // Update active sponsors
+        for (const sponsor of sponsorshipData.sponsors) {
+            if (!sponsor.id)
+                continue;
+            const id = env.SPONSOR_DO.idFromName(sponsor.id);
+            const stub = env.SPONSOR_DO.get(id);
+            // Prepare sponsor data
+            const sponsorData = {
+                owner_id: sponsor.id,
+                owner_login: sponsor.login,
+                avatar_url: sponsor.avatarUrl,
+                is_sponsor: true,
+                clv: sponsor.amountInCents,
+            };
+            // Add update promise to array
+            updatePromises.push(stub.fetch(new Request("http://fake-host/initialize", {
+                method: "POST",
+                body: JSON.stringify({
+                    sponsor: sponsorData,
+                    // We don't have access to individual access tokens here,
+                    // so we'll only update the sponsor data
+                    access_token: null,
+                }),
+            })));
         }
-        else {
-            // Handle case where there are no current sponsors
-            await env.SPONSORFLARE.exec(`UPDATE sponsors SET is_sponsor = 0`);
-        }
+        // Wait for all updates to complete
+        await Promise.all(updatePromises);
         return new Response("Received event", {
             status: 200,
         });
@@ -238,9 +312,7 @@ export const middleware = async (request, env) => {
             ?.find((row) => row.startsWith("github_oauth_state"))
             ?.split("=")[1]
             .trim();
-        // Validate state
         if (!urlState || !stateCookie || urlState !== stateCookie) {
-            // NB: this breaks things on my mobile
             return new Response(`Invalid state`, { status: 400 });
         }
         const code = url.searchParams.get("code");
@@ -248,7 +320,7 @@ export const middleware = async (request, env) => {
             return new Response("Missing code", { status: 400 });
         }
         try {
-            // Immediately exchange token
+            // Exchange code for token (keep existing code)
             const tokenResponse = await fetch("https://github.com/login/oauth/access_token", {
                 method: "POST",
                 headers: {
@@ -261,11 +333,10 @@ export const middleware = async (request, env) => {
                     code: code,
                 }),
             });
-            if (!tokenResponse.ok) {
+            if (!tokenResponse.ok)
                 throw new Error();
-            }
             const { access_token, scope } = await tokenResponse.json();
-            // Fetch user info from GitHub
+            // Fetch user data (keep existing code)
             const userResponse = await fetch("https://api.github.com/user", {
                 headers: {
                     Authorization: `Bearer ${access_token}`,
@@ -275,23 +346,32 @@ export const middleware = async (request, env) => {
             if (!userResponse.ok)
                 throw new Error("Failed to fetch user info");
             const userData = await userResponse.json();
-            // Ensure sponsors table exists with SQLite-compatible schema
-            await env.SPONSORFLARE.exec(`CREATE TABLE IF NOT EXISTS sponsors (owner_id TEXT PRIMARY KEY, owner_login TEXT NOT NULL, avatar_url TEXT, is_authenticated INTEGER DEFAULT 0, source TEXT, is_sponsor INTEGER DEFAULT 0, clv REAL DEFAULT 0, spent REAL DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);`);
-            await env.SPONSORFLARE.exec(`CREATE TABLE IF NOT EXISTS access_tokens (access_token TEXT PRIMARY KEY, owner_id TEXT NOT NULL, source TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (owner_id) REFERENCES sponsors(owner_id));`);
-            const sponsorUpsert = env.SPONSORFLARE.prepare(`INSERT INTO sponsors (owner_id, owner_login, avatar_url, is_authenticated, source)
-         VALUES (?1, ?2, ?3, 1, ?4)
-         ON CONFLICT(owner_id) DO UPDATE SET
-           is_authenticated = 1,
-           avatar_url = excluded.avatar_url,
-           owner_login = excluded.owner_login`).bind(userData.id.toString(), userData.login, userData.avatar_url, url.origin);
-            const tokenInsert = env.SPONSORFLARE.prepare(`INSERT INTO access_tokens (access_token, owner_id, source)
-         VALUES (?1, ?2, ?3)`).bind(access_token, userData.id.toString(), url.origin);
-            // Execute both operations in a transaction
-            await env.SPONSORFLARE.batch([sponsorUpsert, tokenInsert]);
+            // Create sponsor object
+            const sponsorData = {
+                owner_id: userData.id.toString(),
+                owner_login: userData.login,
+                avatar_url: userData.avatar_url,
+                is_authenticated: true,
+                source: url.origin,
+            };
+            // Get Durable Object instance
+            const id = env.SPONSOR_DO.idFromName(userData.id.toString());
+            const stub = env.SPONSOR_DO.get(id);
+            // Initialize the Durable Object with sponsor data and access token
+            await stub.fetch(new Request("http://fake-host/initialize", {
+                method: "POST",
+                body: JSON.stringify({
+                    sponsor: sponsorData,
+                    access_token,
+                    scope,
+                }),
+            }));
+            // Create response with cookies
             const headers = new Headers({
                 Location: url.origin + (env.LOGIN_REDIRECT_URI || "/"),
             });
             headers.append("Set-Cookie", `authorization=${encodeURIComponent(`Bearer ${access_token}`)}; HttpOnly; Path=/; Secure; Max-Age=34560000; SameSite=Lax`);
+            headers.append("Set-Cookie", `owner_id=${encodeURIComponent(userData.id.toString())}; HttpOnly; Path=/; Secure; Max-Age=34560000; SameSite=Lax`);
             headers.append("Set-Cookie", `github_oauth_scope=${encodeURIComponent(scope)}; HttpOnly; Path=/; Secure; Max-Age=34560000; SameSite=Lax`);
             headers.append("Set-Cookie", `github_oauth_state=; HttpOnly; Path=/; Secure; Max-Age=0; SameSite=Lax`);
             return new Response("Redirecting", { status: 307, headers });
@@ -325,50 +405,57 @@ export const middleware = async (request, env) => {
         }
     }
 };
+// Update the getSponsor function
 export const getSponsor = async (request, env, config) => {
-    // Parse request URL
-    const url = new URL(request.url);
-    // Extract authorization from cookies or headers
+    // Get owner_id and authorization from cookies
     const cookie = request.headers.get("Cookie");
     const rows = cookie?.split(";").map((x) => x.trim());
+    const ownerIdCookie = rows?.find((row) => row.startsWith("owner_id="));
+    const owner_id = ownerIdCookie
+        ? decodeURIComponent(ownerIdCookie.split("=")[1].trim())
+        : null;
     const authHeader = rows?.find((row) => row.startsWith("authorization="));
     const authorization = authHeader
         ? decodeURIComponent(authHeader.split("=")[1].trim())
         : request.headers.get("authorization");
-    const accessToken = authorization
-        ? authorization?.slice("Bearer ".length)
-        : url.searchParams.get("apiKey");
-    console.log({ accessToken, authorization });
-    if (!accessToken) {
+    const access_token = authorization
+        ? authorization.slice("Bearer ".length)
+        : new URL(request.url).searchParams.get("apiKey");
+    if (!owner_id || !access_token) {
         return { is_authenticated: false, charged: false };
     }
     try {
-        // Find access token in database
-        const tokenStmt = env.SPONSORFLARE.prepare(`SELECT access_tokens.*, sponsors.* 
-       FROM access_tokens
-       JOIN sponsors ON access_tokens.owner_id = sponsors.owner_id
-       WHERE access_token = ?`).bind(accessToken);
-        const result = await tokenStmt.first();
-        if (!result) {
+        // Get Durable Object instance
+        const id = env.SPONSOR_DO.idFromName(owner_id);
+        const stub = env.SPONSOR_DO.get(id);
+        // Verify access token and get sponsor data
+        const verifyResponse = await stub.fetch(`http://fake-host/verify?token=${encodeURIComponent(access_token)}`);
+        if (!verifyResponse.ok) {
             return { is_authenticated: false, charged: false };
         }
-        // Prepare update if charge is required
+        const sponsorData = await verifyResponse.json();
+        // Handle charging if required
         let charged = false;
         if (config?.charge) {
-            const chargeStmt = env.SPONSORFLARE.prepare(`UPDATE sponsors 
-         SET spent = spent + ?1
-         WHERE owner_id = ?2`).bind(config.charge, result.owner_id);
-            await chargeStmt.run();
-            charged = true;
+            if (!config.allowNegativeClv &&
+                (sponsorData.clv || 0) - (sponsorData.spent || 0) - config.charge < 0) {
+                return { is_authenticated: true, ...sponsorData, charged };
+            }
+            const idempotencyKey = await generateRandomString(16);
+            const chargeResponse = await stub.fetch(`http://fake-host/charge?amount=${config.charge}&idempotency_key=${idempotencyKey}`);
+            if (chargeResponse.ok) {
+                charged = true;
+                const updatedData = await chargeResponse.json();
+                return {
+                    is_authenticated: true,
+                    ...updatedData,
+                    charged,
+                };
+            }
         }
         return {
             is_authenticated: true,
-            owner_login: result.owner_login,
-            owner_id: result.owner_id,
-            avatar_url: result.avatar_url,
-            is_sponsor: Boolean(result.is_sponsor),
-            ltv: result.clv,
-            spent: result.spent,
+            ...sponsorData,
             charged,
         };
     }

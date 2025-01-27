@@ -3,4 +3,4 @@ Insight: github apps are separate from github oauth apps; tried making one but t
 We actually need webhooks at our sponsors dashboard!
 https://docs.github.com/en/sponsors/integrating-with-github-sponsors/configuring-webhooks-for-events-in-your-sponsored-account
 
-For retrieving clv we need the graphql api.
+For retrieving clv we need the graphql API.

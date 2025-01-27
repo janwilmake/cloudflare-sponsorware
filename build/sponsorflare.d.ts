@@ -17,6 +17,12 @@ interface ViewerData {
         id?: string;
     }[];
 }
+export declare class SponsorDO {
+    private state;
+    private storage;
+    constructor(state: DurableObjectState);
+    fetch(request: Request): Promise<Response>;
+}
 export declare function fetchAllSponsorshipData(accessToken: string): Promise<ViewerData>;
 export declare const html: (strings: TemplateStringsArray, ...values: any[]) => string;
 export interface Env {
@@ -26,9 +32,9 @@ export interface Env {
     GITHUB_WEBHOOK_SECRET: string;
     GITHUB_PAT: string;
     LOGIN_REDIRECT_URI: string;
-    SPONSORFLARE: D1Database;
+    SPONSOR_DO: DurableObjectNamespace;
 }
-/** Datastructure of a github user - this is what's consistently stored in the SPONSORFLARE D1 database */
+/** Datastructure of a github user - this is what's consistently stored in the SPONSOR_DO storage */
 export type Sponsor = {
     /** whether or not the sponsor has ever authenticated anywhere */
     is_authenticated?: boolean;
@@ -49,15 +55,12 @@ export type Sponsor = {
 };
 export declare const middleware: (request: Request, env: Env) => Promise<Response | undefined>;
 export declare const getSponsor: (request: Request, env: Env, config?: {
+    /** amount to charge in cents */
     charge: number;
-}) => Promise<{
-    is_authenticated: boolean;
-    owner_login?: string;
-    owner_id?: string;
-    is_sponsor?: boolean;
-    ltv?: number;
-    avatar_url?: string;
-    spent?: number;
+    /** if true, total spent amount may surpass clv */
+    allowNegativeClv?: boolean;
+}) => Promise<Partial<Sponsor> & {
+    /** if true, it means the charge was added to 'spent' */
     charged: boolean;
 }>;
 export {};
