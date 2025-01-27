@@ -49,19 +49,29 @@ export class SponsorDO {
     // Handle different operations based on the path
     switch (url.pathname) {
       case "/initialize":
-        const initData: { sponsor: Sponsor; access_token: string } =
-          await request.json();
+        const initData: {
+          sponsor: Sponsor;
+          access_token: string;
+          scope: string;
+        } = await request.json();
 
-        const already: Sponsor | undefined = await this.storage.get("sponsor");
-
-        await this.storage.put("sponsor", {
-          ...(already || {}),
-          ...initData.sponsor,
+        const already: Sponsor | undefined = await this.storage.get("sponsor", {
+          noCache: true,
         });
 
+        await this.storage.put(
+          "sponsor",
+          {
+            ...(already || {}),
+            ...initData.sponsor,
+          },
+          { noCache: true, allowUnconfirmed: false },
+        );
+
         if (initData.access_token) {
-          await this.storage.put(initData.access_token, true);
+          await this.storage.put(initData.access_token, initData.scope);
         }
+
         return new Response("Initialized", { status: 200 });
 
       case "/verify":
@@ -70,6 +80,7 @@ export class SponsorDO {
         if (!hasToken) {
           return new Response("Invalid token", { status: 401 });
         }
+
         const sponsor = await this.storage.get("sponsor");
         return new Response(JSON.stringify(sponsor), {
           status: 200,
@@ -78,22 +89,57 @@ export class SponsorDO {
 
       case "/charge":
         const chargeAmount = Number(url.searchParams.get("amount"));
+        const idempotencyKey = url.searchParams.get("idempotency_key");
+
+        if (!idempotencyKey) {
+          return new Response("Idempotency key required", { status: 400 });
+        }
+
+        const chargeKey = `charge.${idempotencyKey}`;
+        const existingCharge = await this.storage.get(chargeKey);
+
+        if (existingCharge) {
+          return new Response(
+            JSON.stringify({
+              message: "Charge already processed",
+              charge: existingCharge,
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
+
         const sponsor_data: Sponsor | undefined = await this.storage.get(
           "sponsor",
         );
 
-        if (typeof sponsor_data === "object" && !!sponsor_data) {
-          const updated = {
-            ...sponsor_data,
-            spent: (sponsor_data.spent || 0) + chargeAmount,
-          };
-          await this.storage.put("sponsor", updated);
-          return new Response(JSON.stringify(updated), {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          });
+        if (!sponsor_data) {
+          return new Response("Sponsor not found", { status: 404 });
         }
-        return new Response("Sponsor not found", { status: 404 });
+
+        const updated = {
+          ...sponsor_data,
+          spent: (sponsor_data.spent || 0) + chargeAmount,
+        };
+        await this.storage.put("sponsor", updated);
+
+        // Record the charge with timestamp
+        await this.storage.put(chargeKey, {
+          amount: chargeAmount,
+          timestamp: Date.now(),
+        });
+
+        return new Response(JSON.stringify(updated), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            Pragma: "no-cache",
+            Expires: "0",
+          },
+        });
 
       default:
         return new Response("Not found", { status: 404 });
@@ -536,9 +582,6 @@ export const middleware = async (request: Request, env: Env) => {
         avatar_url: userData.avatar_url,
         is_authenticated: true,
         source: url.origin,
-        is_sponsor: false,
-        clv: 0,
-        spent: 0,
       };
 
       // Get Durable Object instance
@@ -551,7 +594,8 @@ export const middleware = async (request: Request, env: Env) => {
           method: "POST",
           body: JSON.stringify({
             sponsor: sponsorData,
-            access_token: access_token,
+            access_token,
+            scope,
           }),
         }),
       );
@@ -668,8 +712,9 @@ export const getSponsor = async (
     // Handle charging if required
     let charged = false;
     if (config?.charge) {
+      const idempotencyKey = await generateRandomString(16);
       const chargeResponse = await stub.fetch(
-        `http://fake-host/charge?amount=${config.charge}`,
+        `http://fake-host/charge?amount=${config.charge}&idempotency_key=${idempotencyKey}`,
       );
 
       if (chargeResponse.ok) {

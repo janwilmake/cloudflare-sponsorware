@@ -1,6 +1,6 @@
-import { Env, getSponsor, html, middleware, SponsorDO } from "./sponsorflare";
+import { Env, getSponsor, html, middleware } from "./sponsorflare";
 
-export { SponsorDO };
+export { SponsorDO } from "./sponsorflare";
 export default {
   fetch: async (request: Request, env: Env) => {
     // Handle sponsorflare auth

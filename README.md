@@ -15,8 +15,7 @@ Installation:
    1. URL: one of your workers at `/github-webhook`
    2. add a secret that you save to `.dev.vars`
    3. content type: JSON
-5. run `npm i sponsorflare`
-6. run `npx wrangler d1 create sponsorflare` and put the result in wrangler.toml
+5. run `npm i sponsorflare` (or copy over the `sponsorflare.ts` file)
 
 `wrangler.toml`:
 
@@ -25,44 +24,35 @@ Installation:
 GITHUB_REDIRECT_URI = "https://yourworkerdomain.com/callback"
 LOGIN_REDIRECT_URI = "/"
 
-[[d1_databases]]
-binding = "SPONSORFLARE"
-database_name = "sponsorflare"
-database_id = "your-id"
+[[durable_objects.bindings]]
+name = "SPONSOR_DO"
+class_name = "SponsorDO"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["SponsorDO"]
 ```
 
 `main.ts`:
 
-```typescript
-import { middleware, getSponsor } from "sponsorflare";
-
-type Env = {
-  SPONSORFLARE: D1;
-  GITHUB_WEBHOOK_SECRET: string;
-  GITHUB_CLIENT_ID: string;
-  GITHUB_CLIENT_SECRET: string;
-  GITHUB_REDIRECT_URI: string;
-  LOGIN_REDIRECT_URI: string;
-};
+```ts
+import { middleware, getSponsor, Env } from "sponsorflare";
+export { SponsorDO } from "./sponsorflare";
 
 export default {
   fetch: async (request: Request, env: Env) => {
+    // This middleware adds /login, /callback, and /github-webhook endpoints
     const sponsorflare = middleware(request, env);
     if (sponsorflare) return middleware;
 
-    // Do your worker thing!
-    // And if you want to limit stuff...
-    // This is a super fast function that just
-    // does 2 read queries to the D1 and a write if charging
-    const { isAuthenticated, charged } = await getSponsor(request, env, {
-      charge: 1,
-    });
+    // If you want to limit stuff
+    const { charged } = await getSponsor(request, env, { charge: 1 });
 
     if (!charged) {
-      return new Response(
-        "Payment required. Sponsor me! https://github.com/sponsors/janwilmake",
-        { status: 402 },
-      );
+      return new Response("Payment required. Redirecting...", {
+        status: 307,
+        headers: { Location: "https://github.com/sponsors/janwilmake" },
+      });
     }
 
     // Do your paid stuff here after charging the user
@@ -110,3 +100,9 @@ It uses a Durable object instead of d1 database with a storage containing a stor
 - it confirms the access_token provided in the cookie is present in the DO, if not, abort
 - it charges if that was requested by updating the sponsor in the DO
 - it returns the same information like now in the DO response, then in the response of the function.
+
+After this, I added one more measure for security, namely an idempotency key to a charge, to be sure the charge doesn't occur twice. It also tracks all charges.
+
+There is no way possible to get an overview of all users with this implementation, and we also don't have a way to back up the data! Nevertheless, this is a very powerful way to charge people for using workers, and DO's should be sufficiently reliable to handle this usecase, I think.
+
+Because we're not using a global database but a separate database per user, the response latency is incredibly low! This is because a DO always spawns as nearby the worker as possible, and stays there.
