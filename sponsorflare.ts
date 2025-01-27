@@ -669,8 +669,18 @@ export const middleware = async (request: Request, env: Env) => {
 export const getSponsor = async (
   request: Request,
   env: Env,
-  config?: { charge: number },
-): Promise<Partial<Sponsor> & { charged: boolean }> => {
+  config?: {
+    /** amount to charge in cents */
+    charge: number;
+    /** if true, total spent amount may surpass clv */
+    allowNegativeClv?: boolean;
+  },
+): Promise<
+  Partial<Sponsor> & {
+    /** if true, it means the charge was added to 'spent' */
+    charged: boolean;
+  }
+> => {
   // Get owner_id and authorization from cookies
   const cookie = request.headers.get("Cookie");
   const rows = cookie?.split(";").map((x) => x.trim());
@@ -712,6 +722,12 @@ export const getSponsor = async (
     // Handle charging if required
     let charged = false;
     if (config?.charge) {
+      if (
+        !config.allowNegativeClv &&
+        (sponsorData.clv || 0) - (sponsorData.spent || 0) - config.charge < 0
+      ) {
+        return { is_authenticated: true, ...sponsorData, charged };
+      }
       const idempotencyKey = await generateRandomString(16);
       const chargeResponse = await stub.fetch(
         `http://fake-host/charge?amount=${config.charge}&idempotency_key=${idempotencyKey}`,
