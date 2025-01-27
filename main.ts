@@ -6,10 +6,6 @@ export default {
     const sponsorflare = await middleware(request, env);
     if (sponsorflare) return sponsorflare;
 
-    // Check auth status
-    const cookie = request.headers.get("Cookie") || "";
-    const accessToken = cookie.includes("authorization=");
-
     const {
       charged,
       is_authenticated,
@@ -18,7 +14,7 @@ export default {
       spent,
       owner_login,
       avatar_url,
-    } = await getSponsor(request, env, { charge: 0.001 });
+    } = await getSponsor(request, env, { charge: 1 });
 
     return new Response(
       html`<!DOCTYPE html>
@@ -50,7 +46,7 @@ export default {
                   Monetize Your Cloudflare Workers with GitHub Sponsors
                 </p>
                 <div class="flex justify-center gap-4">
-                  ${accessToken
+                  ${is_authenticated
                     ? html`
                         <a
                           href="/?logout=true"
@@ -84,10 +80,12 @@ export default {
                 </div>
               </div>
 
-              ${accessToken
+              ${is_authenticated
                 ? html`
                     <!-- Dashboard Section -->
-                    <div class="bg-slate-800 p-8 rounded-xl text-center mb-12">
+                    <div
+                      class="bg-slate-800 p-8 rounded-xl text-center mb-12 flex flex-col items-center"
+                    >
                       <img src="${avatar_url}" width="50" height="50" />
                       <h2 class="text-2xl font-semibold mb-4">
                         🎉 You're logged in! Welcome, ${owner_login}.
@@ -95,13 +93,17 @@ export default {
                       <p class="text-lg text-slate-400 mb-6">
                         Your customer lifetime value:
                         <span class="font-mono text-orange-400"
-                          >$${(ltv || 0) / 100}</span
+                          >$${parseFloat(String((ltv || 0) / 100)).toFixed(
+                            2,
+                          )}</span
                         >
                       </p>
                       <p class="text-lg text-slate-400 mb-6">
-                        Your cost spent (charging 1/1000 cent per refresh):
+                        Your cost spent (charging 1 cent per refresh):
                         <span class="font-mono text-orange-400"
-                          >$${(spent || 0) / 100}</span
+                          >$${parseFloat(String((spent || 0) / 100)).toFixed(
+                            2,
+                          )}</span
                         >
                       </p>
                       <p class="text-slate-500">

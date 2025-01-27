@@ -476,7 +476,7 @@ export const middleware = async (request: Request, env: Env) => {
 
       // Ensure sponsors table exists with SQLite-compatible schema
       await env.SPONSORFLARE.exec(
-        `CREATE TABLE IF NOT EXISTS sponsors (owner_id TEXT PRIMARY KEY, owner_login TEXT NOT NULL, avatar_url TEXT, is_authenticated INTEGER DEFAULT 0, source TEXT, is_sponsor INTEGER DEFAULT 0, clv INTEGER DEFAULT 0, spent INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);`,
+        `CREATE TABLE IF NOT EXISTS sponsors (owner_id TEXT PRIMARY KEY, owner_login TEXT NOT NULL, avatar_url TEXT, is_authenticated INTEGER DEFAULT 0, source TEXT, is_sponsor INTEGER DEFAULT 0, clv REAL DEFAULT 0, spent REAL DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);`,
       );
 
       await env.SPONSORFLARE.exec(
@@ -585,7 +585,7 @@ export const getSponsor = async (
   const accessToken = authorization
     ? authorization?.slice("Bearer ".length)
     : url.searchParams.get("apiKey");
-
+  console.log({ accessToken, authorization });
   if (!accessToken) {
     return { is_authenticated: false, charged: false };
   }
