@@ -15,7 +15,7 @@ export default {
       spent,
       owner_login,
       avatar_url,
-    } = await getSponsor(request, env, { charge: 1 });
+    } = await getSponsor(request, env, { charge: 1, allowNegativeClv: true });
 
     return new Response(
       html`<!DOCTYPE html>
@@ -124,6 +124,9 @@ export default {
                       </p>
                       <p class="text-slate-500">
                         Sponsor: ${is_sponsor ? "Yes" : "No"}
+                      </p>
+                      <p class="text-slate-500">
+                        Charged? ${charged ? "Yes" : "No"}
                       </p>
 
                       <p class="text-slate-500">
