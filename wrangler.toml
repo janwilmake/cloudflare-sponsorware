@@ -11,8 +11,10 @@ routes = [
 GITHUB_REDIRECT_URI = "https://sponsorflare.com/callback"
 LOGIN_REDIRECT_URI = "/"
 
-[[d1_databases]]
-binding = "SPONSORFLARE"
-database_name = "sponsorflare"
-database_id = "df33c8b1-5b37-4a33-9a33-0545074f250b"
-preview_database_id = "df33c8b1-5b37-4a33-9a33-0545074f250b"
+[[durable_objects.bindings]]
+name = "SPONSOR_DO"
+class_name = "SponsorDO"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["SponsorDO"]

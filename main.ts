@@ -1,5 +1,6 @@
-import { Env, getSponsor, html, middleware } from "./sponsorflare";
+import { Env, getSponsor, html, middleware, SponsorDO } from "./sponsorflare";
 
+export { SponsorDO };
 export default {
   fetch: async (request: Request, env: Env) => {
     // Handle sponsorflare auth
@@ -10,7 +11,7 @@ export default {
       charged,
       is_authenticated,
       is_sponsor,
-      ltv,
+      clv,
       spent,
       owner_login,
       avatar_url,
@@ -93,7 +94,7 @@ export default {
                       <p class="text-lg text-slate-400 mb-6">
                         Your customer lifetime value:
                         <span class="font-mono text-orange-400"
-                          >$${parseFloat(String((ltv || 0) / 100)).toFixed(
+                          >$${parseFloat(String((clv || 0) / 100)).toFixed(
                             2,
                           )}</span
                         >

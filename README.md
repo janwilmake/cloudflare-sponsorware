@@ -88,3 +88,25 @@ export default {
 Yeah! The Proof of Concept is out there. You can choose to simply use it by installing the package, or use it as a template and build it out further if you so desire. I'm going to be using this for most of my products.
 
 ![](poc.png)
+
+# Update 2025-01-27
+
+I learned that we can improve latency by using user-based DOs rather than a globally central database. This has a side-effect that we can't recall all active users, but that's also not something we need!
+
+So I asked claude to update this code so:
+
+It uses a Durable object instead of d1 database with a storage containing a storage for each access token (the key is the access_token, the value is 'true') and for the sponsor (key is 'sponsor')
+
+1. upon /callback
+
+- it puts the owner_id in a cookie
+- it spawns a DO with name equal to `owner_id`
+- it sets the access_token and the sponsor in the DO (ensure to use the access_token as key, not value)
+- it redirects like it does now (but with extra owner_id cookie)
+
+2. upon `getSponsor`
+
+- it looks for DO with name equals the `owner_id` (from cookie)
+- it confirms the access_token provided in the cookie is present in the DO, if not, abort
+- it charges if that was requested by updating the sponsor in the DO
+- it returns the same information like now in the DO response, then in the response of the function.
