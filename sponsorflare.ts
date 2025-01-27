@@ -129,11 +129,19 @@ export async function fetchAllSponsorshipData(
     avatarUrl,
     login,
     sponsorCount: totalCount,
-    sponsors: allNodes.map(({ sponsor, ...rest }) => ({ ...rest, ...sponsor })),
+    sponsors: allNodes.map(({ sponsor: { id, ...user }, ...rest }) => {
+      const decodedString = atob(id!); // "04:User4493559"
+
+      // Extract numeric ID
+      const parts = decodedString.split(":");
+      const numericId = parts[parts.length - 1].replace("User", ""); // "4493559"
+
+      return { id: numericId, ...rest, ...user };
+    }),
   };
 }
 
-// its working!
+//its working!
 // fetchAllSponsorshipData("").then(
 //   (res) => console.dir(res, { depth: 999 }),
 // );
@@ -471,16 +479,24 @@ export const middleware = async (request: Request, env: Env) => {
         `CREATE TABLE IF NOT EXISTS sponsors (owner_id TEXT PRIMARY KEY, owner_login TEXT NOT NULL, avatar_url TEXT, is_authenticated INTEGER DEFAULT 0, source TEXT, is_sponsor INTEGER DEFAULT 0, clv INTEGER DEFAULT 0, spent INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);`,
       );
 
-      // Upsert operation using SQLite-compatible boolean handling
-      const stmt = env.SPONSORFLARE.prepare(
-        `
-    INSERT INTO sponsors (owner_id, owner_login, avatar_url, is_authenticated, source)
-    VALUES (?1, ?2, ?3, 1, ?4)
-    ON CONFLICT(owner_id) DO UPDATE SET
-      is_authenticated = 1,
-      avatar_url = excluded.avatar_url,
-      owner_login = excluded.owner_login
-  `,
+      await env.SPONSORFLARE.exec(
+        `CREATE TABLE IF NOT EXISTS access_tokens (
+          access_token TEXT PRIMARY KEY,
+          owner_id TEXT NOT NULL,
+          source TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (owner_id) REFERENCES sponsors(owner_id)
+        );`,
+      );
+
+      const sponsorUpsert = env.SPONSORFLARE.prepare(
+        `INSERT INTO sponsors (owner_id, owner_login, avatar_url, is_authenticated, source)
+         VALUES (?1, ?2, ?3, 1, ?4)
+         ON CONFLICT(owner_id) DO UPDATE SET
+           is_authenticated = 1,
+           avatar_url = excluded.avatar_url,
+           owner_login = excluded.owner_login`,
       ).bind(
         userData.id.toString(),
         userData.login,
@@ -488,7 +504,13 @@ export const middleware = async (request: Request, env: Env) => {
         url.origin,
       );
 
-      await stmt.run();
+      const tokenInsert = env.SPONSORFLARE.prepare(
+        `INSERT INTO access_tokens (access_token, owner_id, source)
+         VALUES (?1, ?2, ?3)`,
+      ).bind(access_token, userData.id.toString(), url.origin);
+
+      // Execute both operations in a transaction
+      await env.SPONSORFLARE.batch([sponsorUpsert, tokenInsert]);
 
       const headers = new Headers({
         Location: url.origin + (env.LOGIN_REDIRECT_URI || "/"),
@@ -556,5 +578,63 @@ export const getSponsor = async (
   spent?: number;
   charged: boolean;
 }> => {
-  return {};
+  // Parse request URL
+  const url = new URL(request.url);
+
+  // Extract authorization from cookies or headers
+  const cookie = request.headers.get("Cookie");
+  const rows = cookie?.split(";").map((x) => x.trim());
+  const authHeader = rows?.find((row) => row.startsWith("authorization="));
+  const authorization = authHeader
+    ? decodeURIComponent(authHeader.split("=")[1].trim())
+    : request.headers.get("authorization");
+  const accessToken = authorization
+    ? authorization?.slice("Bearer ".length)
+    : url.searchParams.get("apiKey");
+
+  if (!accessToken) {
+    return { is_authenticated: false, charged: false };
+  }
+
+  try {
+    // Find access token in database
+    const tokenStmt = env.SPONSORFLARE.prepare(
+      `SELECT access_tokens.*, sponsors.* 
+       FROM access_tokens
+       JOIN sponsors ON access_tokens.owner_id = sponsors.owner_id
+       WHERE access_token = ?`,
+    ).bind(accessToken);
+
+    const result: any = await tokenStmt.first();
+
+    if (!result) {
+      return { is_authenticated: false, charged: false };
+    }
+
+    // Prepare update if charge is required
+    let charged = false;
+    if (config?.charge) {
+      const chargeStmt = env.SPONSORFLARE.prepare(
+        `UPDATE sponsors 
+         SET spent = spent + ?1, clv = clv + ?1
+         WHERE owner_id = ?2`,
+      ).bind(config.charge, result.owner_id);
+
+      await chargeStmt.run();
+      charged = true;
+    }
+
+    return {
+      is_authenticated: true,
+      owner_login: result.owner_login,
+      owner_id: result.owner_id,
+      is_sponsor: Boolean(result.is_sponsor),
+      ltv: result.clv,
+      spent: result.spent,
+      charged,
+    };
+  } catch (error) {
+    console.error("Sponsor lookup failed:", error);
+    return { is_authenticated: false, charged: false };
+  }
 };
