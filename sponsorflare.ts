@@ -175,6 +175,99 @@ export type Sponsor = {
   spent?: number;
 };
 
+async function verifySignature(secret: string, header: string, payload: any) {
+  let encoder = new TextEncoder();
+  let parts = header.split("=");
+  let sigHex = parts[1];
+
+  let algorithm = { name: "HMAC", hash: { name: "SHA-256" } };
+
+  let keyBytes = encoder.encode(secret);
+  let extractable = false;
+  let key = await crypto.subtle.importKey(
+    "raw",
+    keyBytes,
+    algorithm,
+    extractable,
+    ["sign", "verify"],
+  );
+
+  let sigBytes = hexToBytes(sigHex);
+  let dataBytes = encoder.encode(payload);
+  let equal = await crypto.subtle.verify(
+    algorithm.name,
+    key,
+    sigBytes,
+    dataBytes,
+  );
+
+  return equal;
+}
+
+function hexToBytes(hex: string) {
+  let len = hex.length / 2;
+  let bytes = new Uint8Array(len);
+
+  let index = 0;
+  for (let i = 0; i < hex.length; i += 2) {
+    let c = hex.slice(i, i + 2);
+    let b = parseInt(c, 16);
+    bytes[index] = b;
+    index += 1;
+  }
+
+  return bytes;
+}
+
+interface Enterprise {}
+interface Installation {}
+interface Organization {}
+interface Repository {}
+
+interface User {
+  login: string;
+  id: number;
+  node_id: string;
+  [key: string]: any;
+}
+
+interface Maintainer {
+  node_id: string;
+  [key: string]: any;
+}
+
+interface Tier {
+  created_at: string;
+  description: string;
+  is_custom_ammount?: boolean;
+  is_custom_amount?: boolean;
+  is_one_time: boolean;
+  monthly_price_in_cents: number;
+  monthly_price_in_dollars: number;
+  name: string;
+  node_id: string;
+}
+
+interface Sponsorship {
+  created_at: string;
+  maintainer: Maintainer;
+  node_id: string;
+  privacy_level: string;
+  sponsor: User | null;
+  sponsorable: User | null;
+  tier: Tier;
+}
+
+interface SponsorEvent {
+  changes?: any;
+  enterprise?: Enterprise;
+  installation?: Installation;
+  organization?: Organization;
+  repository?: Repository;
+  sender: User;
+  sponsorship: Sponsorship;
+}
+
 // Helper function to generate a random string
 async function generateRandomString(length: number): Promise<string> {
   const randomBytes = new Uint8Array(length);
@@ -198,6 +291,98 @@ export const middleware = async (request: Request, env: Env) => {
           "authorization=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT, " +
           "github_oauth_scope=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
       },
+    });
+  }
+
+  if (url.pathname === "/github-webhook" && request.method === "POST") {
+    const event = request.headers.get("X-GitHub-Event") as string | null;
+    console.log("ENTERED GITHUB WEBHOOK", event);
+    const secret = env.GITHUB_WEBHOOK_SECRET;
+    if (!secret) {
+      return new Response("No GITHUB_WEBHOOK_SECRET found", {
+        status: 500,
+      });
+    }
+
+    if (!event) {
+      console.log("Event not allowed:" + event);
+
+      return new Response("Event not allowed:" + event, {
+        status: 405,
+      });
+    }
+
+    const payload = await request.text();
+    const json: SponsorEvent = JSON.parse(payload);
+    console.log({ payloadSize: payload.length });
+    const signature256 = request.headers.get("X-Hub-Signature-256");
+    console.log({ signature256 });
+    if (!signature256 || !json) {
+      return new Response("No signature or JSON", {
+        status: 400,
+      });
+    }
+
+    const isValid = await verifySignature(secret, signature256, payload);
+    console.log({ isValid });
+    if (!isValid) {
+      return new Response("Invalid Signature", {
+        status: 400,
+      });
+    }
+
+    const sponsorshipData = await fetchAllSponsorshipData(env.GITHUB_PAT);
+
+    // Prepare batch upsert statements
+    const statements = sponsorshipData.sponsors.map((sponsor) => {
+      return env.SPONSORFLARE.prepare(
+        `INSERT INTO sponsors (
+      owner_id, 
+      owner_login, 
+      avatar_url, 
+      is_sponsor, 
+      clv, 
+      source
+    ) VALUES (?, ?, ?, ?, ?, ?)
+    ON CONFLICT(owner_id) DO UPDATE SET
+      owner_login = excluded.owner_login,
+      avatar_url = excluded.avatar_url,
+      is_sponsor = excluded.is_sponsor,
+      clv = excluded.clv`,
+      ).bind(
+        sponsor.id,
+        sponsor.login,
+        sponsor.avatarUrl,
+        1,
+        sponsor.amountInCents,
+        "github", // source (only set on initial insert)
+      );
+    });
+
+    // Execute all statements in a batch
+    await env.SPONSORFLARE.batch(statements);
+    const currentSponsorIds = sponsorshipData.sponsors
+      .map((s) => s.id)
+      .filter((id) => !!id)
+      .map((x) => x!);
+
+    //TODO: input this into the db:  env.SPONSORFLARE.prepare(``)
+    if (currentSponsorIds.length > 0) {
+      // Update existing records not in current list
+      await env.SPONSORFLARE.prepare(
+        `UPDATE sponsors
+         SET is_sponsor = 0
+         WHERE owner_id NOT IN (${currentSponsorIds.map(() => "?").join(",")})`,
+      )
+        .bind(...currentSponsorIds)
+        .run();
+    } else {
+      // Handle case where there are no current sponsors
+      await env.SPONSORFLARE.exec(`UPDATE sponsors SET is_sponsor = 0`);
+    }
+
+    return new Response("Received event", {
+      status: 200,
     });
   }
 
