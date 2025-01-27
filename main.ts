@@ -1,4 +1,4 @@
-import { Env, html, middleware } from "./sponsorflare";
+import { Env, getSponsor, html, middleware } from "./sponsorflare";
 
 export default {
   fetch: async (request: Request, env: Env) => {
@@ -9,6 +9,16 @@ export default {
     // Check auth status
     const cookie = request.headers.get("Cookie") || "";
     const accessToken = cookie.includes("authorization=");
+
+    const {
+      charged,
+      is_authenticated,
+      is_sponsor,
+      ltv,
+      spent,
+      owner_login,
+      avatar_url,
+    } = await getSponsor(request, env, { charge: 0.001 });
 
     return new Response(
       html`<!DOCTYPE html>
@@ -78,14 +88,29 @@ export default {
                 ? html`
                     <!-- Dashboard Section -->
                     <div class="bg-slate-800 p-8 rounded-xl text-center mb-12">
+                      <img src="${avatar_url}" width="50" height="50" />
                       <h2 class="text-2xl font-semibold mb-4">
-                        🎉 You're logged in!
+                        🎉 You're logged in! Welcome, ${owner_login}.
                       </h2>
                       <p class="text-lg text-slate-400 mb-6">
                         Your customer lifetime value:
-                        <span class="font-mono text-orange-400">$0.00</span>
-                        (TODO)
+                        <span class="font-mono text-orange-400"
+                          >$${(ltv || 0) / 100}</span
+                        >
                       </p>
+                      <p class="text-lg text-slate-400 mb-6">
+                        Your cost spent (charging 1/1000 cent per refresh):
+                        <span class="font-mono text-orange-400"
+                          >$${(spent || 0) / 100}</span
+                        >
+                      </p>
+                      <p class="text-slate-500">
+                        Authenticated: ${is_authenticated ? "Yes" : "No"}
+                      </p>
+                      <p class="text-slate-500">
+                        Sponsor: ${is_sponsor ? "Yes" : "No"}
+                      </p>
+
                       <p class="text-slate-500">
                         Sponsor to increase your lifetime value and access
                         premium features!

@@ -480,14 +480,7 @@ export const middleware = async (request: Request, env: Env) => {
       );
 
       await env.SPONSORFLARE.exec(
-        `CREATE TABLE IF NOT EXISTS access_tokens (
-          access_token TEXT PRIMARY KEY,
-          owner_id TEXT NOT NULL,
-          source TEXT,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (owner_id) REFERENCES sponsors(owner_id)
-        );`,
+        `CREATE TABLE IF NOT EXISTS access_tokens (access_token TEXT PRIMARY KEY, owner_id TEXT NOT NULL, source TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP, FOREIGN KEY (owner_id) REFERENCES sponsors(owner_id));`,
       );
 
       const sponsorUpsert = env.SPONSORFLARE.prepare(
@@ -575,6 +568,7 @@ export const getSponsor = async (
   owner_id?: string;
   is_sponsor?: boolean;
   ltv?: number;
+  avatar_url?: string;
   spent?: number;
   charged: boolean;
 }> => {
@@ -616,7 +610,7 @@ export const getSponsor = async (
     if (config?.charge) {
       const chargeStmt = env.SPONSORFLARE.prepare(
         `UPDATE sponsors 
-         SET spent = spent + ?1, clv = clv + ?1
+         SET spent = spent + ?1
          WHERE owner_id = ?2`,
       ).bind(config.charge, result.owner_id);
 
@@ -628,6 +622,7 @@ export const getSponsor = async (
       is_authenticated: true,
       owner_login: result.owner_login,
       owner_id: result.owner_id,
+      avatar_url: result.avatar_url,
       is_sponsor: Boolean(result.is_sponsor),
       ltv: result.clv,
       spent: result.spent,
