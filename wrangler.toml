@@ -16,6 +16,7 @@ LOGIN_REDIRECT_URI = "/"
 name = "SPONSOR_DO"
 class_name = "SponsorDO"
 
+
 [[migrations]]
 tag = "v1"
 new_classes = ["SponsorDO"]

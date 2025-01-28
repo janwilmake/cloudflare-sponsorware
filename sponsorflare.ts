@@ -2,6 +2,38 @@ declare global {
   var env: Env;
 }
 
+export interface Env {
+  GITHUB_CLIENT_ID: string;
+  GITHUB_CLIENT_SECRET: string;
+  GITHUB_REDIRECT_URI: string;
+  GITHUB_WEBHOOK_SECRET: string;
+  GITHUB_PAT: string;
+  LOGIN_REDIRECT_URI: string;
+  SPONSOR_DO: DurableObjectNamespace;
+  /** If 'true', will skip login and use "GITHUB_PAT" for access */
+  SKIP_LOGIN: string;
+}
+
+/** Datastructure of a github user - this is what's consistently stored in the SPONSOR_DO storage */
+export type Sponsor = {
+  /** whether or not the sponsor has ever authenticated anywhere */
+  is_authenticated?: boolean;
+  /** url where the user first authenticated */
+  source?: string;
+  /** node id of the user */
+  owner_id: string;
+  /** github username */
+  owner_login: string;
+  /** github avatar url */
+  avatar_url?: string;
+  /** true if the user has ever sponsored */
+  is_sponsor?: boolean;
+  /** total money the user has paid, in cents */
+  clv?: number;
+  /** total money spent on behalf of the user (if tracked), in cents */
+  spent?: number;
+};
+
 interface SponsorNode {
   hasSponsorsListing: boolean;
   isSponsoringViewer: boolean;
@@ -265,36 +297,6 @@ export const html = (strings: TemplateStringsArray, ...values: any[]) => {
   );
 };
 
-export interface Env {
-  GITHUB_CLIENT_ID: string;
-  GITHUB_CLIENT_SECRET: string;
-  GITHUB_REDIRECT_URI: string;
-  GITHUB_WEBHOOK_SECRET: string;
-  GITHUB_PAT: string;
-  LOGIN_REDIRECT_URI: string;
-  SPONSOR_DO: DurableObjectNamespace;
-}
-
-/** Datastructure of a github user - this is what's consistently stored in the SPONSOR_DO storage */
-export type Sponsor = {
-  /** whether or not the sponsor has ever authenticated anywhere */
-  is_authenticated?: boolean;
-  /** url where the user first authenticated */
-  source?: string;
-  /** node id of the user */
-  owner_id: string;
-  /** github username */
-  owner_login: string;
-  /** github avatar url */
-  avatar_url?: string;
-  /** true if the user has ever sponsored */
-  is_sponsor?: boolean;
-  /** total money the user has paid, in cents */
-  clv?: number;
-  /** total money spent on behalf of the user (if tracked), in cents */
-  spent?: number;
-};
-
 async function verifySignature(secret: string, header: string, payload: any) {
   let encoder = new TextEncoder();
   let parts = header.split("=");
@@ -396,6 +398,52 @@ async function generateRandomString(length: number): Promise<string> {
     byte.toString(16).padStart(2, "0"),
   ).join("");
 }
+
+const callbackGetAccessToken = async (request: Request, env: Env) => {
+  const url = new URL(request.url);
+  if (env.SKIP_LOGIN === "true") {
+    return { access_token: env.GITHUB_PAT, scope: "repo,user" };
+  }
+
+  // Get the state from URL and cookies
+  const urlState = url.searchParams.get("state");
+  const cookie = request.headers.get("Cookie");
+  const rows = cookie?.split(";").map((x) => x.trim());
+  const stateCookie = rows
+    ?.find((row) => row.startsWith("github_oauth_state"))
+    ?.split("=")[1]
+    .trim();
+
+  if (!urlState || !stateCookie || urlState !== stateCookie) {
+    return { error: `Invalid state`, status: 400 };
+  }
+
+  const code = url.searchParams.get("code");
+  if (!code) {
+    return { error: "Missing code", status: 400 };
+  }
+
+  // Exchange code for token (keep existing code)
+  const tokenResponse = await fetch(
+    "https://github.com/login/oauth/access_token",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        client_id: env.GITHUB_CLIENT_ID,
+        client_secret: env.GITHUB_CLIENT_SECRET,
+        code: code,
+      }),
+    },
+  );
+
+  if (!tokenResponse.ok) throw new Error();
+  const { access_token, scope }: any = await tokenResponse.json();
+  return { access_token, scope };
+};
 
 export const middleware = async (request: Request, env: Env) => {
   const url = new URL(request.url);
@@ -525,44 +573,12 @@ export const middleware = async (request: Request, env: Env) => {
 
   // GitHub OAuth callback route
   if (url.pathname === "/callback") {
-    // Get the state from URL and cookies
-    const urlState = url.searchParams.get("state");
-    const cookie = request.headers.get("Cookie");
-    const rows = cookie?.split(";").map((x) => x.trim());
-    const stateCookie = rows
-      ?.find((row) => row.startsWith("github_oauth_state"))
-      ?.split("=")[1]
-      .trim();
-
-    if (!urlState || !stateCookie || urlState !== stateCookie) {
-      return new Response(`Invalid state`, { status: 400 });
-    }
-
-    const code = url.searchParams.get("code");
-    if (!code) {
-      return new Response("Missing code", { status: 400 });
-    }
-
     try {
-      // Exchange code for token (keep existing code)
-      const tokenResponse = await fetch(
-        "https://github.com/login/oauth/access_token",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          body: JSON.stringify({
-            client_id: env.GITHUB_CLIENT_ID,
-            client_secret: env.GITHUB_CLIENT_SECRET,
-            code: code,
-          }),
-        },
-      );
-
-      if (!tokenResponse.ok) throw new Error();
-      const { access_token, scope }: any = await tokenResponse.json();
+      const { error, status, access_token, scope } =
+        await callbackGetAccessToken(request, env);
+      if (error || !access_token) {
+        return new Response(error, { status });
+      }
 
       // Fetch user data (keep existing code)
       const userResponse = await fetch("https://api.github.com/user", {
