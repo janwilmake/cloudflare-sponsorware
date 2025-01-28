@@ -125,6 +125,11 @@ There is no way possible to get an overview of all users with this implementatio
 
 Because we're not using a global database but a separate database per user, the response latency is incredibly low! This is because a DO always spawns as nearby the worker as possible, and stays there.
 
+## 2025-01-28
+
+- added easy way to login in development (skipping oauth) - `SKIP_LOGIN=true`
+- added redirect_uri param to redirect elsewhere after login
+
 ## TODO
 
 - To list all items in the namespace, we can use either https://developers.cloudflare.com/api/resources/durable_objects/subresources/namespaces/subresources/objects/methods/list/ or we could add a master DO that keeps track of it.

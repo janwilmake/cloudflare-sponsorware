@@ -4,4 +4,6 @@ GITHUB_CLIENT_SECRET=
 # since you send the webhook to a single worker, this only needs to be there for that worker
 GITHUB_WEBHOOK_SECRET=
 GITHUB_PAT=
+# set to 'true' to skip login on localhost. will directly log in with your PAT
+SKIP_LOGIN=
 # use `npx wrangler secret put GITHUB_CLIENT_XXX` to put the secrets
