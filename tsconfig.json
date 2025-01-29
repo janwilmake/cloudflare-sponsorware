@@ -1,5 +1,5 @@
 {
-  "include": ["./sponsorflare.ts"],
+  "include": ["./sponsorflare.ts", "./main.ts"],
   "compilerOptions": {
     "lib": ["ESNext"],
     "target": "ESNext",

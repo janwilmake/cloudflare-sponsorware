@@ -2,6 +2,13 @@ declare global {
   var env: Env;
 }
 
+export type Usage = {
+  totalAmount: number;
+  date: string;
+  hostname: string;
+  count: number;
+};
+
 export interface Env {
   GITHUB_CLIENT_ID: string;
   GITHUB_CLIENT_SECRET: string;
@@ -12,6 +19,7 @@ export interface Env {
   SPONSOR_DO: DurableObjectNamespace;
   /** If 'true', will skip login and use "GITHUB_PAT" for access */
   SKIP_LOGIN: string;
+  COOKIE_DOMAIN_SHARING: string;
 }
 
 /** Datastructure of a github user - this is what's consistently stored in the SPONSOR_DO storage */
@@ -134,6 +142,7 @@ export class SponsorDO {
           sponsor: Sponsor;
           access_token: string;
           scope: string;
+          source: string;
         } = await request.json();
 
         const already: Sponsor | undefined = await this.storage.get("sponsor", {
@@ -150,26 +159,98 @@ export class SponsorDO {
         );
 
         if (initData.access_token) {
-          await this.storage.put(initData.access_token, initData.scope);
+          await this.storage.put(initData.access_token, {
+            scope: initData.scope,
+            createdAt: Date.now(),
+            source: initData.source,
+          });
         }
 
         return new Response("Initialized", { status: 200 });
 
       case "/verify":
         const access_token = url.searchParams.get("token");
-        const hasToken = await this.storage.get(access_token!);
-        if (!hasToken) {
+        const tokenData:
+          | { scope: string; source: string; createdAt: number }
+          | undefined = await this.storage.get(access_token!);
+        if (!tokenData) {
           return new Response("Invalid token", { status: 401 });
         }
 
-        const sponsor = await this.storage.get("sponsor");
+        const sponsor: Sponsor | undefined = await this.storage.get("sponsor");
+
         return new Response(JSON.stringify(sponsor), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         });
 
+      case "/usage":
+        const charges = await this.storage.list({
+          prefix: "charge.",
+          allowConcurrency: true,
+        });
+
+        const entries = Array.from(charges.values()) as {
+          amount: number;
+          timestamp: number;
+          source: string;
+        }[];
+
+        // Group by YYYY-MM-DD and hostname
+        const grouped = entries.reduce(
+          (acc, entry) => {
+            // Convert timestamp to YYYY-MM-DD
+            const date = new Date(entry.timestamp).toISOString().split("T")[0];
+
+            // Extract hostname from URL
+            const url = entry.source ? new URL(entry.source) : undefined;
+            const hostname = url?.hostname || null;
+
+            // Create unique key for date + hostname
+            const key = `${date}|${hostname || "null"}`;
+
+            if (!acc[key]) {
+              acc[key] = {
+                date,
+                hostname,
+                totalAmount: 0,
+                count: 0,
+              };
+            }
+
+            acc[key].totalAmount += entry.amount;
+            acc[key].count += 1;
+
+            return acc;
+          },
+          {} as Record<
+            string,
+            {
+              date: string;
+              hostname: string | null;
+              totalAmount: number;
+              count: number;
+            }
+          >,
+        );
+
+        // Convert to array and sort by date desc, then hostname
+        const result = Object.values(grouped)
+          .sort((a, b) => {
+            const dateCompare = b.date.localeCompare(a.date);
+            if (dateCompare !== 0) return dateCompare;
+            return (a.hostname || "null").localeCompare(b.hostname || "null");
+          })
+          .map((group) => ({
+            ...group,
+            totalAmount: group.totalAmount / 100, // Convert cents to dollars
+          }));
+
+        return new Response(JSON.stringify(result));
+
       case "/charge":
         const chargeAmount = Number(url.searchParams.get("amount"));
+        const source = url.searchParams.get("source");
         const idempotencyKey = url.searchParams.get("idempotency_key");
 
         if (!idempotencyKey) {
@@ -204,12 +285,14 @@ export class SponsorDO {
           ...sponsor_data,
           spent: (sponsor_data.spent || 0) + chargeAmount,
         };
+
         await this.storage.put("sponsor", updated);
 
         // Record the charge with timestamp
         await this.storage.put(chargeKey, {
           amount: chargeAmount,
           timestamp: Date.now(),
+          source,
         });
 
         return new Response(JSON.stringify(updated), {
@@ -450,6 +533,7 @@ const callbackGetAccessToken = async (request: Request, env: Env) => {
   );
 
   if (!tokenResponse.ok) throw new Error();
+
   const { access_token, scope }: any = await tokenResponse.json();
   return { access_token, scope, redirectUriCookie };
 };
@@ -591,15 +675,17 @@ export const middleware = async (request: Request, env: Env) => {
     const redirect_uri =
       url.searchParams.get("redirect_uri") || env.LOGIN_REDIRECT_URI;
 
+    const domainPart =
+      env.COOKIE_DOMAIN_SHARING === "true" ? ` Domain=${domain};` : "";
     headers.append(
       "Set-Cookie",
-      `github_oauth_state=${state}; Domain=${domain}; HttpOnly; Path=/; Secure; SameSite=Lax; Max-Age=600`,
+      `github_oauth_state=${state};${domainPart} HttpOnly; Path=/; Secure; SameSite=Lax; Max-Age=600`,
     );
     headers.append(
       "Set-Cookie",
       `redirect_uri=${encodeURIComponent(
         redirect_uri,
-      )}; Domain=${domain}; HttpOnly; Path=/; Secure; SameSite=Lax; Max-Age=600`,
+      )};${domainPart} HttpOnly; Path=/; Secure; SameSite=Lax; Max-Age=600`,
     );
 
     // Create a response with HTTP-only state cookie
@@ -626,15 +712,16 @@ export const middleware = async (request: Request, env: Env) => {
       if (!userResponse.ok) throw new Error("Failed to fetch user info");
       const userData: any = await userResponse.json();
 
+      const source = redirectUriCookie;
+
       // Create sponsor object
       const sponsorData = {
         owner_id: userData.id.toString(),
         owner_login: userData.login,
         avatar_url: userData.avatar_url,
         is_authenticated: true,
-        source: url.origin,
+        source,
       };
-      console.log({ sponsorData });
 
       // Get Durable Object instance
       const id = env.SPONSOR_DO.idFromName(userData.id.toString());
@@ -648,6 +735,7 @@ export const middleware = async (request: Request, env: Env) => {
             sponsor: sponsorData,
             access_token,
             scope,
+            source,
           }),
         }),
       );
@@ -660,36 +748,38 @@ export const middleware = async (request: Request, env: Env) => {
 
       // on localhost, no 'secure' because we use http
       const securePart = env.SKIP_LOGIN === "true" ? "" : " Secure;";
+      const domainPart =
+        env.COOKIE_DOMAIN_SHARING === "true" ? ` Domain=${domain};` : "";
 
       headers.append(
         "Set-Cookie",
         `authorization=${encodeURIComponent(
           `Bearer ${access_token}`,
-        )}; Domain=${domain}; HttpOnly; Path=/;${securePart} Max-Age=34560000; SameSite=Lax`,
+        )};${domainPart} HttpOnly; Path=/;${securePart} Max-Age=34560000; SameSite=Lax`,
       );
 
       headers.append(
         "Set-Cookie",
         `owner_id=${encodeURIComponent(
           userData.id.toString(),
-        )}; Domain=${domain}; HttpOnly; Path=/;${securePart} Max-Age=34560000; SameSite=Lax`,
+        )};${domainPart} HttpOnly; Path=/;${securePart} Max-Age=34560000; SameSite=Lax`,
       );
 
       headers.append(
         "Set-Cookie",
         `github_oauth_scope=${encodeURIComponent(
           scope,
-        )}; Domain=${domain}; HttpOnly; Path=/;${securePart} Max-Age=34560000; SameSite=Lax`,
+        )};${domainPart} HttpOnly; Path=/;${securePart} Max-Age=34560000; SameSite=Lax`,
       );
 
       headers.append(
         "Set-Cookie",
-        `github_oauth_state=; Domain=${domain}; HttpOnly; Path=/;${securePart} Max-Age=0; SameSite=Lax`,
+        `github_oauth_state=;${domainPart} HttpOnly; Path=/;${securePart} Max-Age=0; SameSite=Lax`,
       );
 
       headers.append(
         "Set-Cookie",
-        `redirect_uri=; Domain=${domain}; HttpOnly; Path=/;${securePart} Max-Age=0; SameSite=Lax`,
+        `redirect_uri=;${domainPart} HttpOnly; Path=/;${securePart} Max-Age=0; SameSite=Lax`,
       );
 
       return new Response("Redirecting", { status: 307, headers });
@@ -742,24 +832,7 @@ export const getSponsor = async (
     charged: boolean;
   }
 > => {
-  // Get owner_id and authorization from cookies
-  const cookie = request.headers.get("Cookie");
-  const rows = cookie?.split(";").map((x) => x.trim());
-
-  const ownerIdCookie = rows?.find((row) => row.startsWith("owner_id="));
-  const owner_id = ownerIdCookie
-    ? decodeURIComponent(ownerIdCookie.split("=")[1].trim())
-    : null;
-
-  const authHeader = rows?.find((row) => row.startsWith("authorization="));
-  const authorization = authHeader
-    ? decodeURIComponent(authHeader.split("=")[1].trim())
-    : request.headers.get("authorization");
-
-  const access_token = authorization
-    ? authorization.slice("Bearer ".length)
-    : new URL(request.url).searchParams.get("apiKey");
-
+  const { owner_id, access_token } = requestGetAccess(request);
   if (!owner_id || !access_token) {
     return { is_authenticated: false, charged: false };
   }
@@ -791,7 +864,11 @@ export const getSponsor = async (
       }
       const idempotencyKey = await generateRandomString(16);
       const chargeResponse = await stub.fetch(
-        `http://fake-host/charge?amount=${config.charge}&idempotency_key=${idempotencyKey}`,
+        `http://fake-host/charge?amount=${
+          config.charge
+        }&idempotency_key=${idempotencyKey}&source=${encodeURIComponent(
+          request.url,
+        )}`,
       );
 
       if (chargeResponse.ok) {
@@ -813,5 +890,51 @@ export const getSponsor = async (
   } catch (error) {
     console.error("Sponsor lookup failed:", error);
     return { is_authenticated: false, charged: false };
+  }
+};
+
+const requestGetAccess = (request: Request) => {
+  // Get owner_id and authorization from cookies
+  const cookie = request.headers.get("Cookie");
+  const rows = cookie?.split(";").map((x) => x.trim());
+
+  const ownerIdCookie = rows?.find((row) => row.startsWith("owner_id="));
+  const owner_id = ownerIdCookie
+    ? decodeURIComponent(ownerIdCookie.split("=")[1].trim())
+    : null;
+
+  const authCookie = rows?.find((row) => row.startsWith("authorization="));
+  const authorization = authCookie
+    ? decodeURIComponent(authCookie.split("=")[1].trim())
+    : request.headers.get("authorization");
+
+  const access_token = authorization
+    ? authorization.slice("Bearer ".length)
+    : new URL(request.url).searchParams.get("apiKey");
+  return { owner_id, access_token };
+};
+
+export const getUsage = async (request: Request, env: Env) => {
+  const { owner_id, access_token } = requestGetAccess(request);
+  if (!owner_id || !access_token) {
+    return { error: "No access" };
+  }
+
+  try {
+    // Get Durable Object instance
+    const id = env.SPONSOR_DO.idFromName(owner_id);
+    const stub = env.SPONSOR_DO.get(id);
+
+    // Verify access token and get sponsor data
+    const verifyResponse = await stub.fetch(`http://fake-host/usage`);
+
+    if (!verifyResponse.ok) {
+      return { error: "Failed to get usage" };
+    }
+
+    const usage: Usage[] = await verifyResponse.json();
+    return { usage };
+  } catch (e: any) {
+    return { error: e.message };
   }
 };

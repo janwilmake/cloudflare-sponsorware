@@ -11,6 +11,7 @@ routes = [
 [vars]
 GITHUB_REDIRECT_URI = "https://sponsorflare.com/callback"
 LOGIN_REDIRECT_URI = "/"
+COOKIE_DOMAIN_SHARING = "true"
 
 [[durable_objects.bindings]]
 name = "SPONSOR_DO"

@@ -1,4 +1,4 @@
-import { Env, getSponsor, html, middleware } from "./sponsorflare";
+import { Env, getSponsor, getUsage, html, middleware } from "./sponsorflare";
 export { SponsorDO } from "./sponsorflare";
 
 export default {
@@ -17,12 +17,20 @@ export default {
       avatar_url,
     } = await getSponsor(request, env, { charge: 1, allowNegativeClv: true });
 
+    const { usage, error } = await getUsage(request, env);
+
+    // Process usage data for the chart
+    const processedData = usage
+      ? processUsageData(usage)
+      : { dates: [], datasets: [] };
+
     return new Response(
       html`<!DOCTYPE html>
         <html lang="en" class="bg-slate-900">
           <head>
             <meta charset="utf8" />
             <script src="https://cdn.tailwindcss.com"></script>
+            <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
             <title>
               Sponsorflare - Monetize Cloudflare Workers with GitHub Sponsors
             </title>
@@ -129,7 +137,53 @@ export default {
                         Charged? ${charged ? "Yes" : "No"}
                       </p>
 
-                      <p class="text-slate-500">
+                      <!-- Usage Chart -->
+                      <div class="w-full mt-8" style="height: 400px;">
+                        <h3 class="text-xl font-semibold mb-4">
+                          Usage by Hostname
+                        </h3>
+                        <div
+                          style="position: relative; height: 300px; width: 100%;"
+                        >
+                          <canvas id="usageChart"></canvas>
+                        </div>
+                      </div>
+
+                      <script>
+                        // Initialize the chart
+                        const ctx = document.getElementById("usageChart");
+                        const chart = new Chart(ctx, {
+                          type: "bar",
+                          data: {
+                            labels: ${JSON.stringify(processedData.dates)},
+                            datasets: ${JSON.stringify(processedData.datasets)},
+                          },
+                          options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            animation: false,
+                            scales: {
+                              x: {
+                                stacked: true,
+                                ticks: { color: "#94a3b8" },
+                              },
+                              y: {
+                                stacked: true,
+                                ticks: { color: "#94a3b8" },
+                              },
+                            },
+                            plugins: {
+                              legend: {
+                                position: "top",
+                                labels: { color: "#94a3b8" },
+                              },
+                            },
+                            barThickness: 100,
+                          },
+                        });
+                      </script>
+
+                      <p class="text-slate-500 mt-4">
                         Sponsor to increase your lifetime value and access
                         premium features!
                       </p>
@@ -181,3 +235,40 @@ export default {
     );
   },
 };
+
+// Helper function to process usage data for the chart
+function processUsageData(usage) {
+  const dateMap = new Map();
+  const hostnames = new Set();
+
+  // Group data by date and collect unique hostnames
+  usage.forEach((entry) => {
+    const date = entry.date.split("T")[0];
+    hostnames.add(entry.hostname);
+
+    if (!dateMap.has(date)) {
+      dateMap.set(date, new Map());
+    }
+    dateMap.get(date).set(entry.hostname, entry.totalAmount || 0); // Convert to dollars
+  });
+
+  // Sort dates
+  const dates = Array.from(dateMap.keys()).sort();
+
+  // Create datasets for each hostname
+  const datasets = Array.from(hostnames).map((hostname, index) => {
+    const data = dates.map((date) => dateMap.get(date).get(hostname) || 0);
+
+    // Generate a color based on index
+    const hue = (index * 137.5) % 360;
+    const color = `hsl(${hue}, 70%, 50%)`;
+
+    return {
+      label: hostname,
+      data: data,
+      backgroundColor: color,
+    };
+  });
+
+  return { dates, datasets };
+}
