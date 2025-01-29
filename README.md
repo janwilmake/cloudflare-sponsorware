@@ -62,15 +62,23 @@ export default {
 
 ## How does it work?
 
-This implementation uses a [Cloudflare Durable Object](https://developers.cloudflare.com/durable-objects/) for each user, to store their charges in their own database. Because of this, the charging happens at the location near to where the worker is executing the request, and it's incredibly fast.
+This implementation uses a [Cloudflare Durable Object](https://developers.cloudflare.com/durable-objects/) for each user, to store their charges in their own database. Because of this, the charging happens at the location near to where the worker is executing the request, and it's incredibly fast. We can call it 'Physical Database-per-tenant' because each database is physically separated from others and very close to users.
 
-![](user-database.drawio.svg)
+![](user-database.drawio.png)
 
 - When the user doesn't have any 'authorization' cookies, the request takes anywhere between 25-120ms (normal for a worker)
 - When the user is authorized and we need to charge them, the request takes anywhere between 50-120ms because it needs to do an extra request between the worker and the DO (not much slower!)
 - If we would've used a regular D1 database (or another consistent one, which requires it to be global) the request would take anywhere between 230ms and 1000ms, depending on where it is coming from (not measured much). Much slower!
 
-This design pattern of a DO per user can be expanded to store more state for a user. If you don't have too many logic that connacts many different users and their state in your worker/app, it allows for stateful apps without having a central database!
+## An idea for a new storage service
+
+This design pattern of a DO per user can be expanded to store more state for a user. If you don't have too many logic that connects many different users and their state in your worker/app, it allows for stateful apps without having a central database!
+
+Everyone their own DB ❤️ Attached to a oauth service like Google, GitHub, or X to get a userID.
+
+As a result, now your users can access their data, safely stored on the edge, within 10-20ms + ±40ms to access the worker.
+
+How cool would that be?! [(Pls respond)](https://x.com/janwilmake/status/1884550721795653931)
 
 ## CHANGELOG
 
