@@ -64,6 +64,8 @@ export default {
 
 This implementation uses a [Cloudflare Durable Object](https://developers.cloudflare.com/durable-objects/) for each user, to store their charges in their own database. Because of this, the charging happens at the location near to where the worker is executing the request, and it's incredibly fast.
 
+![](user-database.drawio.svg)
+
 - When the user doesn't have any 'authorization' cookies, the request takes anywhere between 25-120ms (normal for a worker)
 - When the user is authorized and we need to charge them, the request takes anywhere between 50-120ms because it needs to do an extra request between the worker and the DO (not much slower!)
 - If we would've used a regular D1 database (or another consistent one, which requires it to be global) the request would take anywhere between 230ms and 1000ms, depending on where it is coming from (not measured much). Much slower!
