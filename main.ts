@@ -1,4 +1,11 @@
-import { Env, getSponsor, getUsage, html, middleware } from "./sponsorflare";
+import {
+  Env,
+  getSponsor,
+  getUsage,
+  html,
+  middleware,
+  Usage,
+} from "./sponsorflare";
 export { SponsorDO } from "./sponsorflare";
 
 export default {
@@ -237,7 +244,7 @@ export default {
 };
 
 // Helper function to process usage data for the chart
-function processUsageData(usage) {
+function processUsageData(usage: Usage[]) {
   const dateMap = new Map();
   const hostnames = new Set();
 

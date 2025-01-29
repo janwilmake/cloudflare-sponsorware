@@ -141,6 +141,7 @@ Because we're not using a global database but a separate database per user, the 
 - added redirect_uri param to redirect elsewhere after login
 - confirmed redirect_uri works
 - allow cross-subdomain login as option with `COOKIE_DOMAIN_SHARING="true"`
+- added `getUsage` function that tracks usage.
 
 ## TODO
 
