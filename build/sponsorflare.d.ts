@@ -72,6 +72,11 @@ export declare const getSponsor: (request: Request, env: Env, config?: {
     /** if true, it means the charge was added to 'spent' */
     charged: boolean;
 }>;
+export declare const getCookies: (request: Request) => {
+    scope: string | null;
+    owner_id: string | null;
+    access_token: string | null;
+};
 export declare const getUsage: (request: Request, env: Env) => Promise<{
     usage: Usage[];
     error?: undefined;

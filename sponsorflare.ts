@@ -552,13 +552,15 @@ export const middleware = async (request: Request, env: Env) => {
 
   // Login page route
 
-  if (url.searchParams.has("logout")) {
+  if (url.pathname === "/logout") {
+    const redirect_uri = url.searchParams.get("redirect_uri");
     return new Response("Redirecting...", {
       status: 302,
       headers: {
-        Location: "/",
+        Location: redirect_uri || "/",
         "Set-Cookie":
           "authorization=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT, " +
+          "owner_id=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT, " +
           "github_oauth_scope=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
       },
     });
@@ -658,7 +660,7 @@ export const middleware = async (request: Request, env: Env) => {
   if (url.pathname === "/login") {
     if (env.SKIP_LOGIN === "true") {
       return new Response("Redirecting", {
-        status: 307,
+        status: 302,
         headers: { Location: url.origin + "/callback" },
       });
     }
@@ -698,7 +700,7 @@ export const middleware = async (request: Request, env: Env) => {
     );
 
     // Create a response with HTTP-only state cookie
-    return new Response("Redirecting", { status: 307, headers });
+    return new Response("Redirecting", { status: 302, headers });
   }
 
   // GitHub OAuth callback route
@@ -791,7 +793,7 @@ export const middleware = async (request: Request, env: Env) => {
         `redirect_uri=;${domainPart} HttpOnly; Path=/;${securePart} Max-Age=0; SameSite=Lax`,
       );
 
-      return new Response("Redirecting", { status: 307, headers });
+      return new Response("Redirecting", { status: 302, headers });
     } catch (error) {
       // Error handling
       console.error("ERROR", error);
@@ -841,7 +843,7 @@ export const getSponsor = async (
     charged: boolean;
   }
 > => {
-  const { owner_id, access_token } = requestGetAccess(request);
+  const { owner_id, access_token } = getCookies(request);
   if (!owner_id || !access_token) {
     return { is_authenticated: false, charged: false };
   }
@@ -902,7 +904,7 @@ export const getSponsor = async (
   }
 };
 
-const requestGetAccess = (request: Request) => {
+export const getCookies = (request: Request) => {
   // Get owner_id and authorization from cookies
   const cookie = request.headers.get("Cookie");
   const rows = cookie?.split(";").map((x) => x.trim());
@@ -910,6 +912,13 @@ const requestGetAccess = (request: Request) => {
   const ownerIdCookie = rows?.find((row) => row.startsWith("owner_id="));
   const owner_id = ownerIdCookie
     ? decodeURIComponent(ownerIdCookie.split("=")[1].trim())
+    : null;
+
+  const scopeCookie = rows?.find((row) =>
+    row.startsWith("github_oauth_scope="),
+  );
+  const scope = scopeCookie
+    ? decodeURIComponent(scopeCookie.split("=")[1].trim())
     : null;
 
   const authCookie = rows?.find((row) => row.startsWith("authorization="));
@@ -920,11 +929,11 @@ const requestGetAccess = (request: Request) => {
   const access_token = authorization
     ? authorization.slice("Bearer ".length)
     : new URL(request.url).searchParams.get("apiKey");
-  return { owner_id, access_token };
+  return { scope, owner_id, access_token };
 };
 
 export const getUsage = async (request: Request, env: Env) => {
-  const { owner_id, access_token } = requestGetAccess(request);
+  const { owner_id, access_token } = getCookies(request);
   if (!owner_id || !access_token) {
     return { error: "No access" };
   }

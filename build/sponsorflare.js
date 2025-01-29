@@ -125,10 +125,14 @@ export class SponsorDO {
     }
 }
 export async function fetchAllSponsorshipData(accessToken) {
+    if (!accessToken) {
+        throw new Error("No Access Token");
+    }
     const endpoint = "https://api.github.com/graphql";
     const headers = {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
+        "User-Agent": "CloudflareWorker",
     };
     let afterCursor = null;
     let hasNextPage = false;
@@ -156,7 +160,7 @@ export async function fetchAllSponsorshipData(accessToken) {
                     login
                     avatarUrl
                     bio
-                    id
+                    databaseId
                   }
                   hasSponsorsListing
                   isSponsoringViewer
@@ -178,7 +182,8 @@ export async function fetchAllSponsorshipData(accessToken) {
             body: JSON.stringify({ query, variables }),
         });
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            const text = await response.text();
+            throw new Error(`HTTP error! status: ${response.status} - ${text}`);
         }
         const result = await response.json();
         if (result.errors) {
@@ -200,18 +205,15 @@ export async function fetchAllSponsorshipData(accessToken) {
         hasNextPage = sponsorshipValues.pageInfo.hasNextPage;
         afterCursor = sponsorshipValues.pageInfo.endCursor || null;
     } while (hasNextPage);
+    const sponsors = allNodes.map(({ sponsor: { databaseId, ...user }, ...rest }) => {
+        return { id: databaseId, ...rest, ...user };
+    });
     return {
         monthlyEstimatedSponsorsIncomeInCents: monthlyIncome,
         avatarUrl,
         login,
         sponsorCount: totalCount,
-        sponsors: allNodes.map(({ sponsor: { id, ...user }, ...rest }) => {
-            const decodedString = atob(id); // "04:User4493559"
-            // Extract numeric ID
-            const parts = decodedString.split(":");
-            const numericId = parts[parts.length - 1].replace("User", ""); // "4493559"
-            return { id: numericId, ...rest, ...user };
-        }),
+        sponsors,
     };
 }
 //its working!
@@ -307,86 +309,97 @@ export const middleware = async (request, env) => {
         .reverse()
         .join(".");
     // Login page route
-    if (url.searchParams.has("logout")) {
+    if (url.pathname === "/logout") {
+        const redirect_uri = url.searchParams.get("redirect_uri");
         return new Response("Redirecting...", {
             status: 302,
             headers: {
-                Location: "/",
+                Location: redirect_uri || "/",
                 "Set-Cookie": "authorization=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT, " +
+                    "owner_id=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT, " +
                     "github_oauth_scope=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
             },
         });
     }
     if (url.pathname === "/github-webhook" && request.method === "POST") {
-        const event = request.headers.get("X-GitHub-Event");
-        console.log("ENTERED GITHUB WEBHOOK", event);
-        const secret = env.GITHUB_WEBHOOK_SECRET;
-        if (!secret) {
-            return new Response("No GITHUB_WEBHOOK_SECRET found", {
+        try {
+            const event = request.headers.get("X-GitHub-Event");
+            console.log("ENTERED GITHUB WEBHOOK", event);
+            const secret = env.GITHUB_WEBHOOK_SECRET;
+            if (!secret) {
+                return new Response("No GITHUB_WEBHOOK_SECRET found", {
+                    status: 401,
+                });
+            }
+            if (!event) {
+                console.log("Event not allowed:" + event);
+                return new Response("Event not allowed:" + event, {
+                    status: 405,
+                });
+            }
+            const payload = await request.text();
+            const json = JSON.parse(payload);
+            console.log({ payloadSize: payload.length });
+            const signature256 = request.headers.get("X-Hub-Signature-256");
+            console.log({ signature256 });
+            if (!signature256 || !json) {
+                return new Response("No signature or JSON", {
+                    status: 404,
+                });
+            }
+            const isValid = await verifySignature(secret, signature256, payload);
+            console.log({ isValid });
+            if (!isValid) {
+                return new Response("Invalid Signature", {
+                    status: 400,
+                });
+            }
+            const sponsorshipData = await fetchAllSponsorshipData(env.GITHUB_PAT);
+            console.log({ sponsorshipData });
+            // Create promises array for all updates
+            const updatePromises = [];
+            // Update active sponsors
+            for (const sponsor of sponsorshipData.sponsors) {
+                if (!sponsor.id)
+                    continue;
+                const id = env.SPONSOR_DO.idFromName(sponsor.id);
+                const stub = env.SPONSOR_DO.get(id);
+                // Prepare sponsor data
+                const sponsorData = {
+                    owner_id: sponsor.id,
+                    owner_login: sponsor.login,
+                    avatar_url: sponsor.avatarUrl,
+                    is_sponsor: true,
+                    clv: sponsor.amountInCents,
+                };
+                // Add update promise to array
+                updatePromises.push(stub.fetch(new Request("http://fake-host/initialize", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        sponsor: sponsorData,
+                        // We don't have access to individual access tokens here,
+                        // so we'll only update the sponsor data
+                        access_token: null,
+                    }),
+                })));
+            }
+            // Wait for all updates to complete
+            await Promise.all(updatePromises);
+            return new Response("Received event", {
+                status: 200,
+            });
+        }
+        catch (e) {
+            console.log({ e });
+            return new Response("=== Error In Webhook ===\n" + e.message, {
                 status: 500,
             });
         }
-        if (!event) {
-            console.log("Event not allowed:" + event);
-            return new Response("Event not allowed:" + event, {
-                status: 405,
-            });
-        }
-        const payload = await request.text();
-        const json = JSON.parse(payload);
-        console.log({ payloadSize: payload.length });
-        const signature256 = request.headers.get("X-Hub-Signature-256");
-        console.log({ signature256 });
-        if (!signature256 || !json) {
-            return new Response("No signature or JSON", {
-                status: 400,
-            });
-        }
-        const isValid = await verifySignature(secret, signature256, payload);
-        console.log({ isValid });
-        if (!isValid) {
-            return new Response("Invalid Signature", {
-                status: 400,
-            });
-        }
-        const sponsorshipData = await fetchAllSponsorshipData(env.GITHUB_PAT);
-        // Create promises array for all updates
-        const updatePromises = [];
-        // Update active sponsors
-        for (const sponsor of sponsorshipData.sponsors) {
-            if (!sponsor.id)
-                continue;
-            const id = env.SPONSOR_DO.idFromName(sponsor.id);
-            const stub = env.SPONSOR_DO.get(id);
-            // Prepare sponsor data
-            const sponsorData = {
-                owner_id: sponsor.id,
-                owner_login: sponsor.login,
-                avatar_url: sponsor.avatarUrl,
-                is_sponsor: true,
-                clv: sponsor.amountInCents,
-            };
-            // Add update promise to array
-            updatePromises.push(stub.fetch(new Request("http://fake-host/initialize", {
-                method: "POST",
-                body: JSON.stringify({
-                    sponsor: sponsorData,
-                    // We don't have access to individual access tokens here,
-                    // so we'll only update the sponsor data
-                    access_token: null,
-                }),
-            })));
-        }
-        // Wait for all updates to complete
-        await Promise.all(updatePromises);
-        return new Response("Received event", {
-            status: 200,
-        });
     }
     if (url.pathname === "/login") {
         if (env.SKIP_LOGIN === "true") {
             return new Response("Redirecting", {
-                status: 307,
+                status: 302,
                 headers: { Location: url.origin + "/callback" },
             });
         }
@@ -405,7 +418,7 @@ export const middleware = async (request, env) => {
         headers.append("Set-Cookie", `github_oauth_state=${state};${domainPart} HttpOnly; Path=/; Secure; SameSite=Lax; Max-Age=600`);
         headers.append("Set-Cookie", `redirect_uri=${encodeURIComponent(redirect_uri)};${domainPart} HttpOnly; Path=/; Secure; SameSite=Lax; Max-Age=600`);
         // Create a response with HTTP-only state cookie
-        return new Response("Redirecting", { status: 307, headers });
+        return new Response("Redirecting", { status: 302, headers });
     }
     // GitHub OAuth callback route
     if (url.pathname === "/callback") {
@@ -458,7 +471,7 @@ export const middleware = async (request, env) => {
             headers.append("Set-Cookie", `github_oauth_scope=${encodeURIComponent(scope)};${domainPart} HttpOnly; Path=/;${securePart} Max-Age=34560000; SameSite=Lax`);
             headers.append("Set-Cookie", `github_oauth_state=;${domainPart} HttpOnly; Path=/;${securePart} Max-Age=0; SameSite=Lax`);
             headers.append("Set-Cookie", `redirect_uri=;${domainPart} HttpOnly; Path=/;${securePart} Max-Age=0; SameSite=Lax`);
-            return new Response("Redirecting", { status: 307, headers });
+            return new Response("Redirecting", { status: 302, headers });
         }
         catch (error) {
             // Error handling
@@ -491,7 +504,7 @@ export const middleware = async (request, env) => {
 };
 // Update the getSponsor function
 export const getSponsor = async (request, env, config) => {
-    const { owner_id, access_token } = requestGetAccess(request);
+    const { owner_id, access_token } = getCookies(request);
     if (!owner_id || !access_token) {
         return { is_authenticated: false, charged: false };
     }
@@ -535,13 +548,17 @@ export const getSponsor = async (request, env, config) => {
         return { is_authenticated: false, charged: false };
     }
 };
-const requestGetAccess = (request) => {
+export const getCookies = (request) => {
     // Get owner_id and authorization from cookies
     const cookie = request.headers.get("Cookie");
     const rows = cookie?.split(";").map((x) => x.trim());
     const ownerIdCookie = rows?.find((row) => row.startsWith("owner_id="));
     const owner_id = ownerIdCookie
         ? decodeURIComponent(ownerIdCookie.split("=")[1].trim())
+        : null;
+    const scopeCookie = rows?.find((row) => row.startsWith("github_oauth_scope="));
+    const scope = scopeCookie
+        ? decodeURIComponent(scopeCookie.split("=")[1].trim())
         : null;
     const authCookie = rows?.find((row) => row.startsWith("authorization="));
     const authorization = authCookie
@@ -550,10 +567,10 @@ const requestGetAccess = (request) => {
     const access_token = authorization
         ? authorization.slice("Bearer ".length)
         : new URL(request.url).searchParams.get("apiKey");
-    return { owner_id, access_token };
+    return { scope, owner_id, access_token };
 };
 export const getUsage = async (request, env) => {
-    const { owner_id, access_token } = requestGetAccess(request);
+    const { owner_id, access_token } = getCookies(request);
     if (!owner_id || !access_token) {
         return { error: "No access" };
     }
