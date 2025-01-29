@@ -313,10 +313,14 @@ export class SponsorDO {
 export async function fetchAllSponsorshipData(
   accessToken: string,
 ): Promise<ViewerData> {
+  if (!accessToken) {
+    throw new Error("No Access Token");
+  }
   const endpoint = "https://api.github.com/graphql";
   const headers = {
     Authorization: `Bearer ${accessToken}`,
     "Content-Type": "application/json",
+    "User-Agent": "CloudflareWorker",
   };
 
   let afterCursor: string | null = null;
@@ -371,7 +375,8 @@ export async function fetchAllSponsorshipData(
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const text = await response.text();
+      throw new Error(`HTTP error! status: ${response.status} - ${text}`);
     }
 
     const result: any = await response.json();
@@ -400,19 +405,24 @@ export async function fetchAllSponsorshipData(
     afterCursor = sponsorshipValues.pageInfo.endCursor || null;
   } while (hasNextPage);
 
+  const sponsors = allNodes.map(
+    ({ sponsor: { databaseId, ...user }, ...rest }) => {
+      return { id: databaseId, ...rest, ...user };
+    },
+  );
   return {
     monthlyEstimatedSponsorsIncomeInCents: monthlyIncome,
     avatarUrl,
     login,
     sponsorCount: totalCount,
-    sponsors: allNodes.map(({ sponsor: { databaseId, ...user }, ...rest }) => {
-      return { id: databaseId, ...rest, ...user };
-    }),
+    sponsors,
   };
 }
 
 //its working!
-// fetchAllSponsorshipData("").then((res) => console.dir(res, { depth: 999 }));
+// fetchAllSponsorshipData("").then(
+//   (res) => console.dir(res, { depth: 999 }),
+// );
 
 export const html = (strings: TemplateStringsArray, ...values: any[]) => {
   return strings.reduce(
@@ -595,7 +605,7 @@ export const middleware = async (request: Request, env: Env) => {
       }
 
       const sponsorshipData = await fetchAllSponsorshipData(env.GITHUB_PAT);
-
+      console.log({ sponsorshipData });
       // Create promises array for all updates
       const updatePromises = [];
 
@@ -638,7 +648,10 @@ export const middleware = async (request: Request, env: Env) => {
         status: 200,
       });
     } catch (e: any) {
-      return new Response("Error" + e.message, { status: 500 });
+      console.log({ e });
+      return new Response("=== Error In Webhook ===\n" + e.message, {
+        status: 500,
+      });
     }
   }
 
