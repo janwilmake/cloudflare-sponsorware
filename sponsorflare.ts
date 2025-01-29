@@ -48,7 +48,7 @@ interface SponsorNode {
   login?: string;
   avatarUrl?: string;
   bio?: string;
-  id?: string;
+  databaseId?: string;
 }
 
 interface SponsorshipValueNode {
@@ -346,7 +346,7 @@ export async function fetchAllSponsorshipData(
                     login
                     avatarUrl
                     bio
-                    id
+                    databaseId
                   }
                   hasSponsorsListing
                   isSponsoringViewer
@@ -405,22 +405,14 @@ export async function fetchAllSponsorshipData(
     avatarUrl,
     login,
     sponsorCount: totalCount,
-    sponsors: allNodes.map(({ sponsor: { id, ...user }, ...rest }) => {
-      const decodedString = atob(id!); // "04:User4493559"
-
-      // Extract numeric ID
-      const parts = decodedString.split(":");
-      const numericId = parts[parts.length - 1].replace("User", ""); // "4493559"
-
-      return { id: numericId, ...rest, ...user };
+    sponsors: allNodes.map(({ sponsor: { databaseId, ...user }, ...rest }) => {
+      return { id: databaseId, ...rest, ...user };
     }),
   };
 }
 
 //its working!
-// fetchAllSponsorshipData("").then(
-//   (res) => console.dir(res, { depth: 999 }),
-// );
+// fetchAllSponsorshipData("").then((res) => console.dir(res, { depth: 999 }));
 
 export const html = (strings: TemplateStringsArray, ...values: any[]) => {
   return strings.reduce(
@@ -563,87 +555,91 @@ export const middleware = async (request: Request, env: Env) => {
   }
 
   if (url.pathname === "/github-webhook" && request.method === "POST") {
-    const event = request.headers.get("X-GitHub-Event") as string | null;
-    console.log("ENTERED GITHUB WEBHOOK", event);
-    const secret = env.GITHUB_WEBHOOK_SECRET;
+    try {
+      const event = request.headers.get("X-GitHub-Event") as string | null;
+      console.log("ENTERED GITHUB WEBHOOK", event);
+      const secret = env.GITHUB_WEBHOOK_SECRET;
 
-    if (!secret) {
-      return new Response("No GITHUB_WEBHOOK_SECRET found", {
-        status: 500,
-      });
-    }
+      if (!secret) {
+        return new Response("No GITHUB_WEBHOOK_SECRET found", {
+          status: 401,
+        });
+      }
 
-    if (!event) {
-      console.log("Event not allowed:" + event);
-      return new Response("Event not allowed:" + event, {
-        status: 405,
-      });
-    }
+      if (!event) {
+        console.log("Event not allowed:" + event);
+        return new Response("Event not allowed:" + event, {
+          status: 405,
+        });
+      }
 
-    const payload = await request.text();
-    const json: SponsorEvent = JSON.parse(payload);
-    console.log({ payloadSize: payload.length });
-    const signature256 = request.headers.get("X-Hub-Signature-256");
-    console.log({ signature256 });
+      const payload = await request.text();
+      const json: SponsorEvent = JSON.parse(payload);
+      console.log({ payloadSize: payload.length });
+      const signature256 = request.headers.get("X-Hub-Signature-256");
+      console.log({ signature256 });
 
-    if (!signature256 || !json) {
-      return new Response("No signature or JSON", {
-        status: 400,
-      });
-    }
+      if (!signature256 || !json) {
+        return new Response("No signature or JSON", {
+          status: 404,
+        });
+      }
 
-    const isValid = await verifySignature(secret, signature256, payload);
-    console.log({ isValid });
+      const isValid = await verifySignature(secret, signature256, payload);
+      console.log({ isValid });
 
-    if (!isValid) {
-      return new Response("Invalid Signature", {
-        status: 400,
-      });
-    }
+      if (!isValid) {
+        return new Response("Invalid Signature", {
+          status: 400,
+        });
+      }
 
-    const sponsorshipData = await fetchAllSponsorshipData(env.GITHUB_PAT);
+      const sponsorshipData = await fetchAllSponsorshipData(env.GITHUB_PAT);
 
-    // Create promises array for all updates
-    const updatePromises = [];
+      // Create promises array for all updates
+      const updatePromises = [];
 
-    // Update active sponsors
-    for (const sponsor of sponsorshipData.sponsors) {
-      if (!sponsor.id) continue;
+      // Update active sponsors
+      for (const sponsor of sponsorshipData.sponsors) {
+        if (!sponsor.id) continue;
 
-      const id = env.SPONSOR_DO.idFromName(sponsor.id);
-      const stub = env.SPONSOR_DO.get(id);
+        const id = env.SPONSOR_DO.idFromName(sponsor.id);
+        const stub = env.SPONSOR_DO.get(id);
 
-      // Prepare sponsor data
-      const sponsorData = {
-        owner_id: sponsor.id,
-        owner_login: sponsor.login,
-        avatar_url: sponsor.avatarUrl,
-        is_sponsor: true,
-        clv: sponsor.amountInCents,
-      };
+        // Prepare sponsor data
+        const sponsorData = {
+          owner_id: sponsor.id,
+          owner_login: sponsor.login,
+          avatar_url: sponsor.avatarUrl,
+          is_sponsor: true,
+          clv: sponsor.amountInCents,
+        };
 
-      // Add update promise to array
-      updatePromises.push(
-        stub.fetch(
-          new Request("http://fake-host/initialize", {
-            method: "POST",
-            body: JSON.stringify({
-              sponsor: sponsorData,
-              // We don't have access to individual access tokens here,
-              // so we'll only update the sponsor data
-              access_token: null,
+        // Add update promise to array
+        updatePromises.push(
+          stub.fetch(
+            new Request("http://fake-host/initialize", {
+              method: "POST",
+              body: JSON.stringify({
+                sponsor: sponsorData,
+                // We don't have access to individual access tokens here,
+                // so we'll only update the sponsor data
+                access_token: null,
+              }),
             }),
-          }),
-        ),
-      );
+          ),
+        );
+      }
+
+      // Wait for all updates to complete
+      await Promise.all(updatePromises);
+
+      return new Response("Received event", {
+        status: 200,
+      });
+    } catch (e: any) {
+      return new Response("Error" + e.message, { status: 500 });
     }
-
-    // Wait for all updates to complete
-    await Promise.all(updatePromises);
-
-    return new Response("Received event", {
-      status: 200,
-    });
   }
 
   if (url.pathname === "/login") {
