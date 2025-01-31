@@ -40,6 +40,8 @@ export type Sponsor = {
   clv?: number;
   /** total money spent on behalf of the user (if tracked), in cents */
   spent?: number;
+  /** (clv-spent)/100 = balance (in usd) */
+  balance?: string;
 };
 
 interface SponsorNode {
@@ -669,6 +671,7 @@ export const middleware = async (request: Request, env: Env) => {
   }
 
   if (url.pathname === "/login") {
+    const scope = url.searchParams.get("scope");
     if (env.SKIP_LOGIN === "true") {
       return new Response("Redirecting", {
         status: 302,
@@ -676,7 +679,6 @@ export const middleware = async (request: Request, env: Env) => {
       });
     }
 
-    const scope = url.searchParams.get("scope");
     const state = await generateRandomString(16);
     if (
       !env.GITHUB_CLIENT_ID ||
@@ -877,12 +879,16 @@ export const getSponsor = async (
 
     // Handle charging if required
     let charged = false;
+    const balanceCents = (sponsorData.clv || 0) - (sponsorData.spent || 0);
+    const balance = (balanceCents / 100).toFixed(2);
     if (config?.charge) {
-      if (
-        !config.allowNegativeClv &&
-        (sponsorData.clv || 0) - (sponsorData.spent || 0) - config.charge < 0
-      ) {
-        return { is_authenticated: true, ...sponsorData, charged };
+      if (!config.allowNegativeClv && balanceCents < config.charge) {
+        return {
+          is_authenticated: true,
+          ...sponsorData,
+          balance,
+          charged: false,
+        };
       }
       const idempotencyKey = await generateRandomString(16);
       const chargeResponse = await stub.fetch(
@@ -896,9 +902,13 @@ export const getSponsor = async (
       if (chargeResponse.ok) {
         charged = true;
         const updatedData: Sponsor = await chargeResponse.json();
+        const balanceCents = (updatedData.clv || 0) - (updatedData.spent || 0);
+        const balance = (balanceCents / 100).toFixed(2);
+
         return {
           is_authenticated: true,
           ...updatedData,
+          balance,
           charged,
         };
       }
@@ -907,6 +917,7 @@ export const getSponsor = async (
     return {
       is_authenticated: true,
       ...sponsorData,
+      balance,
       charged,
     };
   } catch (error) {
