@@ -311,15 +311,13 @@ export const middleware = async (request, env) => {
     // Login page route
     if (url.pathname === "/logout") {
         const redirect_uri = url.searchParams.get("redirect_uri");
-        return new Response("Redirecting...", {
-            status: 302,
-            headers: {
-                Location: redirect_uri || "/",
-                "Set-Cookie": "authorization=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT, " +
-                    "owner_id=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT, " +
-                    "github_oauth_scope=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
-            },
-        });
+        const securePart = env.SKIP_LOGIN === "true" ? "" : " Secure;";
+        const domainPart = env.COOKIE_DOMAIN_SHARING === "true" ? ` Domain=${domain};` : "";
+        const headers = new Headers({ Location: redirect_uri || "/" });
+        headers.append("Set-Cookie", `authorization=;${domainPart} HttpOnly; Path=/;${securePart} Max-Age=0; SameSite=Lax`);
+        headers.append("Set-Cookie", `owner_id=;${domainPart} HttpOnly; Path=/;${securePart} Max-Age=0; SameSite=Lax`);
+        headers.append("Set-Cookie", `github_oauth_scope=;${domainPart} HttpOnly; Path=/;${securePart} Max-Age=0; SameSite=Lax`);
+        return new Response("Redirecting", { status: 302, headers });
     }
     if (url.pathname === "/github-webhook" && request.method === "POST") {
         try {

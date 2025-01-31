@@ -137,11 +137,31 @@ Because we're not using a global database but a separate database per user, the 
 
 ## 2025-01-28
 
-- added easy way to login in development (skipping oauth) - `SKIP_LOGIN=true`
-- added redirect_uri param to redirect elsewhere after login
-- confirmed redirect_uri works
-- allow cross-subdomain login as option with `COOKIE_DOMAIN_SHARING="true"`
-- added `getUsage` function that tracks usage.
+✅ added easy way to login in development (skipping oauth) - `SKIP_LOGIN=true`
+
+✅ added redirect_uri param to redirect elsewhere after login
+
+✅ confirmed redirect_uri works
+
+## 2025-01-29
+
+✅ `COOKIE_DOMAIN_SHARING=true` should be a configurable param.
+
+✅ Added `getUsage` function that tracks usage.
+
+✅ Ensure the URL is stored for every transaction.
+
+✅ Learn more about the behavior of cookies and the specifications that are currently mostly implemented in 99% of used browsers. Write a thread on sponsorflare again and the concepts of sharing login across subdomains and the 'GitHub Automatic Login'.
+
+✅ Become my own sponsor using a different Github Account, for $50/m, to test it works as intended, and test the flow. Especially: how fast does the credit get there?
+
+✅ Fixed a bug where the ID couldn't be parsed and we missed a header for github
+
+✅ Add ability to logout via `/logout` which removes headers, removes access from client, and takes `?redirect_uri`.
+
+✅ Create `wilmake.cftemplate` template which basically just has all basic files for a new repo including a package of sponsorflare, so I can start with `gh repo create --public abcabc -p wilmake.cftemplate`
+
+🔥 For the first time, I feel like I have a very powerful way of measuring work done with workers. Let's start using sponsorflare as a package and create a template.
 
 ## TODO
 
