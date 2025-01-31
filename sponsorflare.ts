@@ -722,7 +722,9 @@ export const middleware = async (request: Request, env: Env) => {
       const { error, status, access_token, scope, redirectUriCookie } =
         await callbackGetAccessToken(request, env);
       if (error || !access_token) {
-        return new Response(error, { status });
+        return new Response(error || "Something went wrong: " + status, {
+          status,
+        });
       }
 
       // Fetch user data (keep existing code)
@@ -770,8 +772,9 @@ export const middleware = async (request: Request, env: Env) => {
           redirectUriCookie || url.origin + (env.LOGIN_REDIRECT_URI || "/"),
       });
 
+      const skipLogin = env.SKIP_LOGIN === "true";
       // on localhost, no 'secure' because we use http
-      const securePart = env.SKIP_LOGIN === "true" ? "" : " Secure;";
+      const securePart = skipLogin ? "" : " Secure;";
       const domainPart =
         env.COOKIE_DOMAIN_SHARING === "true" ? ` Domain=${domain};` : "";
 
@@ -806,7 +809,10 @@ export const middleware = async (request: Request, env: Env) => {
         `redirect_uri=;${domainPart} HttpOnly; Path=/;${securePart} Max-Age=0; SameSite=Lax`,
       );
 
-      return new Response("Redirecting", { status: 302, headers });
+      return new Response(`Redirecting to ${headers.get("location")}`, {
+        status: skipLogin ? 200 : 302,
+        headers,
+      });
     } catch (error) {
       // Error handling
       console.error("ERROR", error);
