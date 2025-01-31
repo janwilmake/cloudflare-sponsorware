@@ -37,6 +37,8 @@ export type Sponsor = {
     clv?: number;
     /** total money spent on behalf of the user (if tracked), in cents */
     spent?: number;
+    /** (clv-spent)/100 = balance (in usd) */
+    balance?: string;
 };
 interface ViewerData {
     monthlyEstimatedSponsorsIncomeInCents: number;

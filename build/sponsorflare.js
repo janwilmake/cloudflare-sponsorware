@@ -395,13 +395,13 @@ export const middleware = async (request, env) => {
         }
     }
     if (url.pathname === "/login") {
+        const scope = url.searchParams.get("scope");
         if (env.SKIP_LOGIN === "true") {
             return new Response("Redirecting", {
                 status: 302,
                 headers: { Location: url.origin + "/callback" },
             });
         }
-        const scope = url.searchParams.get("scope");
         const state = await generateRandomString(16);
         if (!env.GITHUB_CLIENT_ID ||
             !env.GITHUB_REDIRECT_URI ||
@@ -518,19 +518,28 @@ export const getSponsor = async (request, env, config) => {
         const sponsorData = await verifyResponse.json();
         // Handle charging if required
         let charged = false;
+        const balanceCents = (sponsorData.clv || 0) - (sponsorData.spent || 0);
+        const balance = (balanceCents / 100).toFixed(2);
         if (config?.charge) {
-            if (!config.allowNegativeClv &&
-                (sponsorData.clv || 0) - (sponsorData.spent || 0) - config.charge < 0) {
-                return { is_authenticated: true, ...sponsorData, charged };
+            if (!config.allowNegativeClv && balanceCents < config.charge) {
+                return {
+                    is_authenticated: true,
+                    ...sponsorData,
+                    balance,
+                    charged: false,
+                };
             }
             const idempotencyKey = await generateRandomString(16);
             const chargeResponse = await stub.fetch(`http://fake-host/charge?amount=${config.charge}&idempotency_key=${idempotencyKey}&source=${encodeURIComponent(request.url)}`);
             if (chargeResponse.ok) {
                 charged = true;
                 const updatedData = await chargeResponse.json();
+                const balanceCents = (updatedData.clv || 0) - (updatedData.spent || 0);
+                const balance = (balanceCents / 100).toFixed(2);
                 return {
                     is_authenticated: true,
                     ...updatedData,
+                    balance,
                     charged,
                 };
             }
@@ -538,6 +547,7 @@ export const getSponsor = async (request, env, config) => {
         return {
             is_authenticated: true,
             ...sponsorData,
+            balance,
             charged,
         };
     }
