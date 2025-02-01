@@ -246,7 +246,8 @@ export class SponsorDO {
           .map((group) => ({
             ...group,
             totalAmount: group.totalAmount / 100, // Convert cents to dollars
-          }));
+          }))
+          .sort((a, b) => (a.date < b.date ? -1 : 1));
 
         return new Response(JSON.stringify(result));
 
