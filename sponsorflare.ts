@@ -768,35 +768,33 @@ export const middleware = async (request: Request, env: Env) => {
 
       // Create response with cookies
       const headers = new Headers({
-        Location:
-          redirectUriCookie || url.origin + (env.LOGIN_REDIRECT_URI || "/"),
+        Location: redirectUriCookie || env.LOGIN_REDIRECT_URI || "/",
       });
 
       const skipLogin = env.SKIP_LOGIN === "true";
       // on localhost, no 'secure' because we use http
       const securePart = skipLogin ? "" : " Secure;";
       const domainPart =
-        env.COOKIE_DOMAIN_SHARING === "true" ? ` Domain=${domain};` : "";
-
+        env.COOKIE_DOMAIN_SHARING === "true" && !skipLogin
+          ? ` Domain=${domain};`
+          : "";
+      const cookieSuffix = `;${domainPart} HttpOnly; Path=/;${securePart} Max-Age=34560000; SameSite=Lax`;
+      console.log({ cookieSuffix });
       headers.append(
         "Set-Cookie",
         `authorization=${encodeURIComponent(
           `Bearer ${access_token}`,
-        )};${domainPart} HttpOnly; Path=/;${securePart} Max-Age=34560000; SameSite=Lax`,
+        )}${cookieSuffix}`,
       );
 
       headers.append(
         "Set-Cookie",
-        `owner_id=${encodeURIComponent(
-          userData.id.toString(),
-        )};${domainPart} HttpOnly; Path=/;${securePart} Max-Age=34560000; SameSite=Lax`,
+        `owner_id=${encodeURIComponent(userData.id.toString())}${cookieSuffix}`,
       );
 
       headers.append(
         "Set-Cookie",
-        `github_oauth_scope=${encodeURIComponent(
-          scope,
-        )};${domainPart} HttpOnly; Path=/;${securePart} Max-Age=34560000; SameSite=Lax`,
+        `github_oauth_scope=${encodeURIComponent(scope)}${cookieSuffix}`,
       );
 
       headers.append(

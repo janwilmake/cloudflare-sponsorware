@@ -423,7 +423,9 @@ export const middleware = async (request, env) => {
         try {
             const { error, status, access_token, scope, redirectUriCookie } = await callbackGetAccessToken(request, env);
             if (error || !access_token) {
-                return new Response(error, { status });
+                return new Response(error || "Something went wrong: " + status, {
+                    status,
+                });
             }
             // Fetch user data (keep existing code)
             const userResponse = await fetch("https://api.github.com/user", {
@@ -459,17 +461,25 @@ export const middleware = async (request, env) => {
             }));
             // Create response with cookies
             const headers = new Headers({
-                Location: redirectUriCookie || url.origin + (env.LOGIN_REDIRECT_URI || "/"),
+                Location: redirectUriCookie || env.LOGIN_REDIRECT_URI || "/",
             });
+            const skipLogin = env.SKIP_LOGIN === "true";
             // on localhost, no 'secure' because we use http
-            const securePart = env.SKIP_LOGIN === "true" ? "" : " Secure;";
-            const domainPart = env.COOKIE_DOMAIN_SHARING === "true" ? ` Domain=${domain};` : "";
-            headers.append("Set-Cookie", `authorization=${encodeURIComponent(`Bearer ${access_token}`)};${domainPart} HttpOnly; Path=/;${securePart} Max-Age=34560000; SameSite=Lax`);
-            headers.append("Set-Cookie", `owner_id=${encodeURIComponent(userData.id.toString())};${domainPart} HttpOnly; Path=/;${securePart} Max-Age=34560000; SameSite=Lax`);
-            headers.append("Set-Cookie", `github_oauth_scope=${encodeURIComponent(scope)};${domainPart} HttpOnly; Path=/;${securePart} Max-Age=34560000; SameSite=Lax`);
+            const securePart = skipLogin ? "" : " Secure;";
+            const domainPart = env.COOKIE_DOMAIN_SHARING === "true" && !skipLogin
+                ? ` Domain=${domain};`
+                : "";
+            const cookieSuffix = `;${domainPart} HttpOnly; Path=/;${securePart} Max-Age=34560000; SameSite=Lax`;
+            console.log({ cookieSuffix });
+            headers.append("Set-Cookie", `authorization=${encodeURIComponent(`Bearer ${access_token}`)}${cookieSuffix}`);
+            headers.append("Set-Cookie", `owner_id=${encodeURIComponent(userData.id.toString())}${cookieSuffix}`);
+            headers.append("Set-Cookie", `github_oauth_scope=${encodeURIComponent(scope)}${cookieSuffix}`);
             headers.append("Set-Cookie", `github_oauth_state=;${domainPart} HttpOnly; Path=/;${securePart} Max-Age=0; SameSite=Lax`);
             headers.append("Set-Cookie", `redirect_uri=;${domainPart} HttpOnly; Path=/;${securePart} Max-Age=0; SameSite=Lax`);
-            return new Response("Redirecting", { status: 302, headers });
+            return new Response(`Redirecting to ${headers.get("location")}`, {
+                status: skipLogin ? 200 : 302,
+                headers,
+            });
         }
         catch (error) {
             // Error handling
