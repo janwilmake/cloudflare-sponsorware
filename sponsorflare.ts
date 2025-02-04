@@ -1055,7 +1055,7 @@ export default {
 };
 ```
 
-
+Example: see `user-todo-example.ts`
 
 */
 export const proxy =
