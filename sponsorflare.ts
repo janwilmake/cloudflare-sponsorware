@@ -9,6 +9,35 @@ export type Usage = {
   count: number;
 };
 
+export const setCredit = async (
+  request: Request,
+  env: Env,
+): Promise<Response> => {
+  const url = new URL(request.url);
+  const userId = url.searchParams.get("userId");
+  const apiKey = url.searchParams.get("apiKey");
+  const clv = Number(url.searchParams.get("clv"));
+
+  if (!userId || isNaN(clv)) {
+    return new Response("Invalid userId or clv", { status: 400 });
+  }
+
+  if (!apiKey || apiKey !== env.GITHUB_PAT) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
+  const id = env.SPONSOR_DO.idFromName(userId);
+  const stub = env.SPONSOR_DO.get(id);
+
+  const response = await stub.fetch(`http://fake-host/set-credit?clv=${clv}`);
+
+  if (!response.ok) {
+    return new Response("Failed to set credit", { status: 500 });
+  }
+
+  return response;
+};
+
 export interface Env {
   GITHUB_CLIENT_ID: string;
   GITHUB_CLIENT_SECRET: string;
@@ -251,7 +280,32 @@ export class SponsorDO {
 
         return new Response(JSON.stringify(result));
 
-      case "/charge":
+      case "/set-credit": {
+        const newClv = Number(url.searchParams.get("clv"));
+
+        if (isNaN(newClv)) {
+          return new Response("Invalid userId or clv", { status: 400 });
+        }
+
+        const sponsor_data: Sponsor | undefined = await this.storage.get(
+          "sponsor",
+        );
+
+        if (!sponsor_data) {
+          return new Response("Sponsor not found", { status: 404 });
+        }
+
+        const updated = {
+          ...sponsor_data,
+          clv: newClv,
+        };
+
+        await this.storage.put("sponsor", updated);
+
+        return new Response(JSON.stringify(updated));
+      }
+
+      case "/charge": {
         const chargeAmount = Number(url.searchParams.get("amount"));
         const source = url.searchParams.get("source");
         const idempotencyKey = url.searchParams.get("idempotency_key");
@@ -307,7 +361,7 @@ export class SponsorDO {
             Expires: "0",
           },
         });
-
+      }
       default:
         return new Response("Not found", { status: 404 });
     }
@@ -669,6 +723,10 @@ export const middleware = async (request: Request, env: Env) => {
         status: 500,
       });
     }
+  }
+
+  if (url.pathname === "/set-credit") {
+    return setCredit(request, env);
   }
 
   if (url.pathname === "/login") {
