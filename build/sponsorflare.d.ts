@@ -62,6 +62,7 @@ export declare class SponsorDO {
     constructor(state: DurableObjectState);
     fetch(request: Request): Promise<Response>;
 }
+export declare const setCredit: (request: Request, env: Env) => Promise<Response>;
 export declare function fetchAllSponsorshipData(accessToken: string): Promise<ViewerData>;
 export declare const html: (strings: TemplateStringsArray, ...values: any[]) => string;
 export declare const middleware: (request: Request, env: Env) => Promise<Response | undefined>;
@@ -86,4 +87,22 @@ export declare const getUsage: (request: Request, env: Env) => Promise<{
     error: any;
     usage?: undefined;
 }>;
+/** Example: This would be a layered DO that first verifies the owner exists, then goes to a different DO for the same owner where the request is executed.
+
+This makes that DO an incredibly simple way to create monetised, user-authenticated workers
+
+Usage:
+
+```
+export default {
+  fetch: proxy("MY_USER_DO"),
+};
+```
+
+Example: see `user-todo-example.ts`
+
+*/
+export declare const proxy: (DO_NAME: string) => (request: Request, env: Env & {
+    [doName: string]: DurableObjectNamespace;
+}) => Promise<Response>;
 export {};

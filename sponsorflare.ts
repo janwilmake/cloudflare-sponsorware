@@ -1043,7 +1043,8 @@ export const getUsage = async (request: Request, env: Env) => {
   }
 };
 
-/** Example: This would be a layered DO that first verifies the owner exists, then goes to a different DO for the same owner where the request is executed.
+/** 
+Example: This would be a layered DO that first verifies the owner exists, then goes to a different DO for the same owner where the request is executed.
 
 This makes that DO an incredibly simple way to create monetised, user-authenticated workers
 

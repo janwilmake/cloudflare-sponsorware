@@ -75,9 +75,26 @@ export class SponsorDO {
                     .map((group) => ({
                     ...group,
                     totalAmount: group.totalAmount / 100, // Convert cents to dollars
-                }));
+                }))
+                    .sort((a, b) => (a.date < b.date ? -1 : 1));
                 return new Response(JSON.stringify(result));
-            case "/charge":
+            case "/set-credit": {
+                const newClv = Number(url.searchParams.get("clv"));
+                if (isNaN(newClv)) {
+                    return new Response("Invalid userId or clv", { status: 400 });
+                }
+                const sponsor_data = await this.storage.get("sponsor");
+                if (!sponsor_data) {
+                    return new Response("Sponsor not found", { status: 404 });
+                }
+                const updated = {
+                    ...sponsor_data,
+                    clv: newClv,
+                };
+                await this.storage.put("sponsor", updated);
+                return new Response(JSON.stringify(updated));
+            }
+            case "/charge": {
                 const chargeAmount = Number(url.searchParams.get("amount"));
                 const source = url.searchParams.get("source");
                 const idempotencyKey = url.searchParams.get("idempotency_key");
@@ -119,11 +136,31 @@ export class SponsorDO {
                         Expires: "0",
                     },
                 });
+            }
             default:
                 return new Response("Not found", { status: 404 });
         }
     }
 }
+export const setCredit = async (request, env) => {
+    const url = new URL(request.url);
+    const userId = url.searchParams.get("userId");
+    const apiKey = url.searchParams.get("apiKey");
+    const clv = Number(url.searchParams.get("clv"));
+    if (!userId || isNaN(clv)) {
+        return new Response("Invalid userId or clv", { status: 400 });
+    }
+    if (!apiKey || apiKey !== env.GITHUB_PAT) {
+        return new Response("Unauthorized", { status: 401 });
+    }
+    const id = env.SPONSOR_DO.idFromName(userId);
+    const stub = env.SPONSOR_DO.get(id);
+    const response = await stub.fetch(`http://fake-host/set-credit?clv=${clv}`);
+    if (!response.ok) {
+        return new Response("Failed to set credit", { status: 500 });
+    }
+    return response;
+};
 export async function fetchAllSponsorshipData(accessToken) {
     if (!accessToken) {
         throw new Error("No Access Token");
@@ -394,6 +431,9 @@ export const middleware = async (request, env) => {
             });
         }
     }
+    if (url.pathname === "/set-credit") {
+        return setCredit(request, env);
+    }
     if (url.pathname === "/login") {
         const scope = url.searchParams.get("scope");
         if (env.SKIP_LOGIN === "true") {
@@ -607,4 +647,40 @@ export const getUsage = async (request, env) => {
     catch (e) {
         return { error: e.message };
     }
+};
+/** Example: This would be a layered DO that first verifies the owner exists, then goes to a different DO for the same owner where the request is executed.
+
+This makes that DO an incredibly simple way to create monetised, user-authenticated workers
+
+Usage:
+
+```
+export default {
+  fetch: proxy("MY_USER_DO"),
+};
+```
+
+Example: see `user-todo-example.ts`
+
+*/
+export const proxy = (DO_NAME) => async (request, env) => {
+    const sponsorflare = await middleware(request, env);
+    if (sponsorflare)
+        return sponsorflare;
+    const sponsorData = await getSponsor(request, env);
+    if (!sponsorData.is_authenticated || !sponsorData.owner_id) {
+        return new Response("Unauthorized", { status: 401 });
+    }
+    // ensure we have the data available
+    request.headers.set("sponsor", JSON.stringify(sponsorData));
+    const response = await env[DO_NAME].get(env[DO_NAME].idFromName(sponsorData.owner_id)).fetch(request);
+    const charge = response.headers.get("X-Charge");
+    if (charge && !isNaN(Number(charge))) {
+        const { charged } = await getSponsor(request, env, {
+            charge: Number(charge),
+            allowNegativeClv: true,
+        });
+        console.log({ charged });
+    }
+    return response;
 };
