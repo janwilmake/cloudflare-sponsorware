@@ -163,6 +163,12 @@ Because we're not using a global database but a separate database per user, the 
 
 🔥 For the first time, I feel like I have a very powerful way of measuring work done with workers. Let's start using sponsorflare as a package and create a template.
 
+## 2025-02-04
+
+✅ Added ability to set balance of a user via the api using the admin token
+
+✅ Created a `proxy` and an example to use it, in which we can keep a todo database per user. See: [user-todo-example.ts](user-todo-example.ts)
+
 ## TODO
 
 - To list all items in the namespace, we can use either https://developers.cloudflare.com/api/resources/durable_objects/subresources/namespaces/subresources/objects/methods/list/ or we could add a master DO that keeps track of it.

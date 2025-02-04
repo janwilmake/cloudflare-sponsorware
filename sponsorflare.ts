@@ -9,35 +9,6 @@ export type Usage = {
   count: number;
 };
 
-export const setCredit = async (
-  request: Request,
-  env: Env,
-): Promise<Response> => {
-  const url = new URL(request.url);
-  const userId = url.searchParams.get("userId");
-  const apiKey = url.searchParams.get("apiKey");
-  const clv = Number(url.searchParams.get("clv"));
-
-  if (!userId || isNaN(clv)) {
-    return new Response("Invalid userId or clv", { status: 400 });
-  }
-
-  if (!apiKey || apiKey !== env.GITHUB_PAT) {
-    return new Response("Unauthorized", { status: 401 });
-  }
-
-  const id = env.SPONSOR_DO.idFromName(userId);
-  const stub = env.SPONSOR_DO.get(id);
-
-  const response = await stub.fetch(`http://fake-host/set-credit?clv=${clv}`);
-
-  if (!response.ok) {
-    return new Response("Failed to set credit", { status: 500 });
-  }
-
-  return response;
-};
-
 export interface Env {
   GITHUB_CLIENT_ID: string;
   GITHUB_CLIENT_SECRET: string;
@@ -367,6 +338,36 @@ export class SponsorDO {
     }
   }
 }
+
+export const setCredit = async (
+  request: Request,
+  env: Env,
+): Promise<Response> => {
+  const url = new URL(request.url);
+  const userId = url.searchParams.get("userId");
+  const apiKey = url.searchParams.get("apiKey");
+  const clv = Number(url.searchParams.get("clv"));
+
+  if (!userId || isNaN(clv)) {
+    return new Response("Invalid userId or clv", { status: 400 });
+  }
+
+  if (!apiKey || apiKey !== env.GITHUB_PAT) {
+    return new Response("Unauthorized", { status: 401 });
+  }
+
+  const id = env.SPONSOR_DO.idFromName(userId);
+  const stub = env.SPONSOR_DO.get(id);
+
+  const response = await stub.fetch(`http://fake-host/set-credit?clv=${clv}`);
+
+  if (!response.ok) {
+    return new Response("Failed to set credit", { status: 500 });
+  }
+
+  return response;
+};
+
 export async function fetchAllSponsorshipData(
   accessToken: string,
 ): Promise<ViewerData> {
@@ -1041,3 +1042,52 @@ export const getUsage = async (request: Request, env: Env) => {
     return { error: e.message };
   }
 };
+
+/** Example: This would be a layered DO that first verifies the owner exists, then goes to a different DO for the same owner where the request is executed.
+
+This makes that DO an incredibly simple way to create monetised, user-authenticated workers
+
+Usage:
+
+```
+export default {
+  fetch: proxy("MY_USER_DO"),
+};
+```
+
+
+
+*/
+export const proxy =
+  (DO_NAME: string) =>
+  async (
+    request: Request,
+    env: Env & { [doName: string]: DurableObjectNamespace },
+  ) => {
+    const sponsorflare = await middleware(request, env);
+    if (sponsorflare) return sponsorflare;
+
+    const sponsorData = await getSponsor(request, env);
+    if (!sponsorData.is_authenticated || !sponsorData.owner_id) {
+      return new Response("Unauthorized", { status: 401 });
+    }
+
+    // ensure we have the data available
+    request.headers.set("sponsor", JSON.stringify(sponsorData));
+
+    const response = await env[DO_NAME].get(
+      env[DO_NAME].idFromName(sponsorData.owner_id),
+    ).fetch(request);
+
+    const charge = response.headers.get("X-Charge");
+
+    if (charge && !isNaN(Number(charge))) {
+      const { charged } = await getSponsor(request, env, {
+        charge: Number(charge),
+        allowNegativeClv: true,
+      });
+      console.log({ charged });
+    }
+
+    return response;
+  };
