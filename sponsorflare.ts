@@ -41,7 +41,7 @@ export type Sponsor = {
   /** total money spent on behalf of the user (if tracked), in cents */
   spent?: number;
   /** (clv-spent)/100 = balance (in usd) */
-  balance?: string;
+  balance?: number;
 };
 
 interface SponsorNode {
@@ -944,7 +944,7 @@ export const getSponsor = async (
     // Handle charging if required
     let charged = false;
     const balanceCents = (sponsorData.clv || 0) - (sponsorData.spent || 0);
-    const balance = (balanceCents / 100).toFixed(2);
+    const balance = balanceCents / 100;
     if (config?.charge) {
       if (!config.allowNegativeClv && balanceCents < config.charge) {
         return {
@@ -967,7 +967,7 @@ export const getSponsor = async (
         charged = true;
         const updatedData: Sponsor = await chargeResponse.json();
         const balanceCents = (updatedData.clv || 0) - (updatedData.spent || 0);
-        const balance = (balanceCents / 100).toFixed(2);
+        const balance = balanceCents / 100;
 
         return {
           is_authenticated: true,
