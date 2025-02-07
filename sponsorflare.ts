@@ -915,14 +915,22 @@ export const getSponsor = async (
     allowNegativeClv?: boolean;
   },
 ): Promise<
-  Partial<Sponsor> & {
+  {
     /** if true, it means the charge was added to 'spent' */
     charged: boolean;
-  }
+    access_token?: string | null;
+    owner_id?: string | null;
+    scope?: string | null;
+  } & Partial<Sponsor>
 > => {
-  const { owner_id, access_token } = getCookies(request);
+  const { owner_id, access_token, scope } = getCookies(request);
   if (!owner_id || !access_token) {
-    return { is_authenticated: false, charged: false };
+    return {
+      is_authenticated: false,
+      charged: false,
+      access_token,
+      scope,
+    };
   }
 
   try {
@@ -936,7 +944,12 @@ export const getSponsor = async (
     );
 
     if (!verifyResponse.ok) {
-      return { is_authenticated: false, charged: false };
+      return {
+        is_authenticated: false,
+        charged: false,
+        access_token,
+        scope,
+      };
     }
 
     const sponsorData: Sponsor = await verifyResponse.json();
@@ -952,6 +965,8 @@ export const getSponsor = async (
           ...sponsorData,
           balance,
           charged: false,
+          access_token,
+          scope,
         };
       }
       const idempotencyKey = await generateRandomString(16);
@@ -971,6 +986,8 @@ export const getSponsor = async (
 
         return {
           is_authenticated: true,
+          access_token,
+          scope,
           ...updatedData,
           balance,
           charged,
