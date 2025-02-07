@@ -569,7 +569,7 @@ export const getSponsor = async (request, env, config) => {
         // Handle charging if required
         let charged = false;
         const balanceCents = (sponsorData.clv || 0) - (sponsorData.spent || 0);
-        const balance = (balanceCents / 100).toFixed(2);
+        const balance = balanceCents / 100;
         if (config?.charge) {
             if (!config.allowNegativeClv && balanceCents < config.charge) {
                 return {
@@ -585,7 +585,7 @@ export const getSponsor = async (request, env, config) => {
                 charged = true;
                 const updatedData = await chargeResponse.json();
                 const balanceCents = (updatedData.clv || 0) - (updatedData.spent || 0);
-                const balance = (balanceCents / 100).toFixed(2);
+                const balance = balanceCents / 100;
                 return {
                     is_authenticated: true,
                     ...updatedData,
@@ -648,7 +648,8 @@ export const getUsage = async (request, env) => {
         return { error: e.message };
     }
 };
-/** Example: This would be a layered DO that first verifies the owner exists, then goes to a different DO for the same owner where the request is executed.
+/**
+Example: This would be a layered DO that first verifies the owner exists, then goes to a different DO for the same owner where the request is executed.
 
 This makes that DO an incredibly simple way to create monetised, user-authenticated workers
 

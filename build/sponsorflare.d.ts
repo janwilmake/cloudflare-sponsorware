@@ -38,7 +38,7 @@ export type Sponsor = {
     /** total money spent on behalf of the user (if tracked), in cents */
     spent?: number;
     /** (clv-spent)/100 = balance (in usd) */
-    balance?: string;
+    balance?: number;
 };
 interface ViewerData {
     monthlyEstimatedSponsorsIncomeInCents: number;
@@ -87,7 +87,8 @@ export declare const getUsage: (request: Request, env: Env) => Promise<{
     error: any;
     usage?: undefined;
 }>;
-/** Example: This would be a layered DO that first verifies the owner exists, then goes to a different DO for the same owner where the request is executed.
+/**
+Example: This would be a layered DO that first verifies the owner exists, then goes to a different DO for the same owner where the request is executed.
 
 This makes that DO an incredibly simple way to create monetised, user-authenticated workers
 
