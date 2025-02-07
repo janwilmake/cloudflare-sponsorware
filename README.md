@@ -43,10 +43,12 @@ export default {
   fetch: async (request: Request, env: Env) => {
     // This middleware adds /login, /callback, and /github-webhook endpoints
     const sponsorflare = middleware(request, env);
-    if (sponsorflare) return middleware;
+    if (sponsorflare) return sponsorflare;
 
-    // If you want to limit stuff
-    const { charged } = await getSponsor(request, env, { charge: 1 });
+    // This is how you charge someone and/or get the sponsor info
+    const { charged, ...sponsor } = await getSponsor(request, env, {
+      charge: 1,
+    });
 
     if (!charged) {
       return new Response("Payment required. Redirecting...", {

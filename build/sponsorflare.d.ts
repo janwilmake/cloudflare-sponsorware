@@ -71,10 +71,13 @@ export declare const getSponsor: (request: Request, env: Env, config?: {
     charge: number;
     /** if true, total spent amount may surpass clv */
     allowNegativeClv?: boolean;
-}) => Promise<Partial<Sponsor> & {
+}) => Promise<{
     /** if true, it means the charge was added to 'spent' */
     charged: boolean;
-}>;
+    access_token?: string | null;
+    owner_id?: string | null;
+    scope?: string | null;
+} & Partial<Sponsor>>;
 export declare const getCookies: (request: Request) => {
     scope: string | null;
     owner_id: string | null;

@@ -45,7 +45,7 @@ export default {
                   ${is_authenticated
             ? html `
                         <a
-                          href="/?logout=true"
+                          href="/logout"
                           class="bg-orange-500 hover:bg-orange-600 px-6 py-3 rounded-lg font-medium transition-colors"
                         >
                           Logout

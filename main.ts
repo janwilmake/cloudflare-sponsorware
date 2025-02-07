@@ -52,14 +52,15 @@ export default {
           <body class="text-slate-100">
             <main class="max-w-6xl mx-auto px-4 py-16">
               <!-- Hero Section -->
-              <div class="text-center mb-20">
+              <div class="text-center mt-20 mb-20">
                 <h1
                   class="text-5xl font-bold mb-6 bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent"
                 >
-                  Sponsorflare
+                  AI Agent Monetisation in 3 Lines of Code
                 </h1>
                 <p class="text-2xl text-slate-300 mb-8">
-                  Monetize Your Cloudflare Workers with GitHub Sponsors
+                  Charge users to use your AI Agent Tools built with Cloudflare
+                  Workers by having them login to GitHub and sponsor you.
                 </p>
                 <div class="flex justify-center gap-4">
                   ${is_authenticated
@@ -71,17 +72,11 @@ export default {
                           Logout
                         </a>
                         <a
-                          href="https://github.com/sponsors/janwilmake"
+                          href="https://github.com/janwilmake/cloudflare-sponsorware"
                           target="_blank"
                           class="border border-orange-500 text-orange-500 px-6 py-3 rounded-lg font-medium hover:bg-orange-500/10 transition-colors"
                         >
-                          Sponsor Me ➔
-                        </a>
-                        <a
-                          href="/readme"
-                          class="border border-orange-500 text-orange-500 px-6 py-3 rounded-lg font-medium hover:bg-orange-500/10 transition-colors"
-                        >
-                          About
+                          View Installation Instructions (GitHub)
                         </a>
                       `
                     : html`
@@ -89,7 +84,7 @@ export default {
                           href="/login?scope=user:email"
                           class="bg-orange-500 hover:bg-orange-600 px-6 py-3 rounded-lg font-medium transition-colors"
                         >
-                          Login with GitHub
+                          See Demo (GitHub Login)
                         </a>
                         <a
                           href="https://github.com/janwilmake/cloudflare-sponsorware"
@@ -97,12 +92,6 @@ export default {
                           class="border border-orange-500 text-orange-500 px-6 py-3 rounded-lg font-medium hover:bg-orange-500/10 transition-colors"
                         >
                           View on GitHub
-                        </a>
-                        <a
-                          href="/readme"
-                          class="border border-orange-500 text-orange-500 px-6 py-3 rounded-lg font-medium hover:bg-orange-500/10 transition-colors"
-                        >
-                          About
                         </a>
                       `}
                 </div>
@@ -119,36 +108,61 @@ export default {
                         🎉 You're logged in! Welcome, ${owner_login}.
                       </h2>
                       <p class="text-lg text-slate-400 mb-6">
-                        Your customer lifetime value:
-                        <span class="font-mono text-orange-400"
+                        You
+                        <b class="text-orange-500"
+                          >${is_sponsor ? "have" : "have not"}</b
+                        >
+                        Sponsored me. Your customer lifetime value is now:
+                        <b class="font-mono text-orange-400"
                           >$${parseFloat(String((clv || 0) / 100)).toFixed(
                             2,
-                          )}</span
+                          )}</b
                         >
                       </p>
-                      <p class="text-lg text-slate-400 mb-6">
-                        Your cost spent (charging 1 cent per refresh):
+                      <p class="py-8 text-lg text-slate-400">
+                        To increase CLV you can sponsor me on GitHub:
+                        <a
+                          href="https://github.com/sponsors/janwilmake"
+                          target="_blank"
+                          class="border border-orange-500 text-orange-500 px-6 py-3 rounded-lg font-medium hover:bg-orange-500/10 transition-colors"
+                        >
+                          Sponsor Me ➔
+                        </a>
+                      </p>
+                      <p class="text-lg text-slate-400 mb-6 py-8">
+                        Your cost spent (This demo charges 1 cent each time you
+                        refresh):
                         <span class="font-mono text-orange-400"
                           >$${parseFloat(String((spent || 0) / 100)).toFixed(
                             2,
                           )}</span
                         >
                       </p>
-                      <p class="text-slate-500">
-                        Authenticated: ${is_authenticated ? "Yes" : "No"}
-                      </p>
-                      <p class="text-slate-500">
-                        Sponsor: ${is_sponsor ? "Yes" : "No"}
-                      </p>
-                      <p class="text-slate-500">
-                        Charged? ${charged ? "Yes" : "No"}
-                      </p>
 
                       <!-- Usage Chart -->
                       <div class="w-full mt-8" style="height: 400px;">
-                        <h3 class="text-xl font-semibold mb-4">
-                          Usage by Hostname
-                        </h3>
+                        <h3 class="text-xl font-semibold mb-4">Dashboard</h3>
+
+                        <p class="text-slate-500 mt-4">
+                          Your credit can be spent at all my workers! Some of
+                          the monetized tools include:
+                          <a
+                            class="text-orange-300 hover:text-orange-500"
+                            href="https://dashboard.uithub.com"
+                            >Uithub Dashboard</a
+                          >
+                          |
+                          <a
+                            class="text-orange-300 hover:text-orange-500"
+                            href="https://chat.uithub.com"
+                            >Uithub Chat</a
+                          >
+                        </p>
+                        <p class="text-slate-500 mt-4">
+                          You can see how much you spent on each worker per day
+                          from here.
+                        </p>
+
                         <div
                           style="position: relative; height: 300px; width: 100%;"
                         >
@@ -189,51 +203,33 @@ export default {
                           },
                         });
                       </script>
-
-                      <p class="text-slate-500 mt-4">
-                        Sponsor to increase your lifetime value and access
-                        premium features!
-                      </p>
                     </div>
                   `
                 : html`
                     <!-- Features Grid -->
-                    <div class="grid md:grid-cols-3 gap-8 mb-20">
-                      <div class="bg-slate-800 p-8 rounded-xl">
-                        <h3 class="text-orange-400 text-xl font-semibold mb-4">
-                          ⚡️ Easy Integration
-                        </h3>
-                        <p class="text-slate-400">
-                          Add sponsor verification to your Workers with just a
-                          few lines of code.
-                        </p>
-                      </div>
-                      <div class="bg-slate-800 p-8 rounded-xl">
-                        <h3 class="text-orange-400 text-xl font-semibold mb-4">
-                          🔒 GitHub Sponsors
-                        </h3>
-                        <p class="text-slate-400">
-                          Leverage GitHub's sponsorship infrastructure for
-                          seamless monetization.
-                        </p>
-                      </div>
-                      <div class="bg-slate-800 p-8 rounded-xl">
-                        <h3 class="text-orange-400 text-xl font-semibold mb-4">
-                          💸 Flexible Limits
-                        </h3>
-                        <p class="text-slate-400">
-                          Control access based on lifetime sponsorship value
-                          with simple APIs.
-                        </p>
-                      </div>
+                    <!-- Code Showcase -->
+                    <div class="bg-slate-800 p-8 rounded-xl mb-20">
+                      <pre class="overflow-x-auto">
+    <code class="text-sm">
+<span class="text-blue-400">const</span> <span class="text-orange-300">sponsorflare</span> = <span class="text-yellow-300">middleware</span>(request, env);
+<span class="text-blue-400">if</span> (sponsorflare) <span class="text-blue-400">return</span> sponsorflare;
+<span class="text-blue-400">const</span> { charged, ...sponsor } = <span class="text-blue-400">await</span> <span class="text-yellow-300">getSponsor</span>(request, env, { charge: <span class="text-green-300">1</span> });</code>
+  </pre>
                     </div>
                   `}
 
               <!-- Footer -->
               <div
-                class="text-center text-slate-500 border-t border-slate-800 pt-12"
+                class="text-center justify-center flex flex-row gap-4 text-slate-500 border-t border-slate-800 pt-12"
               >
                 <p>Empowering Cloudflare Developers to Monetize Their Work</p>
+                |
+                <a
+                  href="/readme"
+                  class="font-medium hover:text-orange-500 transition-colors"
+                >
+                  About
+                </a>
               </div>
             </main>
           </body>

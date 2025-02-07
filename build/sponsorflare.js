@@ -552,9 +552,14 @@ export const middleware = async (request, env) => {
 };
 // Update the getSponsor function
 export const getSponsor = async (request, env, config) => {
-    const { owner_id, access_token } = getCookies(request);
+    const { owner_id, access_token, scope } = getCookies(request);
     if (!owner_id || !access_token) {
-        return { is_authenticated: false, charged: false };
+        return {
+            is_authenticated: false,
+            charged: false,
+            access_token,
+            scope,
+        };
     }
     try {
         // Get Durable Object instance
@@ -563,7 +568,12 @@ export const getSponsor = async (request, env, config) => {
         // Verify access token and get sponsor data
         const verifyResponse = await stub.fetch(`http://fake-host/verify?token=${encodeURIComponent(access_token)}`);
         if (!verifyResponse.ok) {
-            return { is_authenticated: false, charged: false };
+            return {
+                is_authenticated: false,
+                charged: false,
+                access_token,
+                scope,
+            };
         }
         const sponsorData = await verifyResponse.json();
         // Handle charging if required
@@ -577,6 +587,8 @@ export const getSponsor = async (request, env, config) => {
                     ...sponsorData,
                     balance,
                     charged: false,
+                    access_token,
+                    scope,
                 };
             }
             const idempotencyKey = await generateRandomString(16);
@@ -588,6 +600,8 @@ export const getSponsor = async (request, env, config) => {
                 const balance = balanceCents / 100;
                 return {
                     is_authenticated: true,
+                    access_token,
+                    scope,
                     ...updatedData,
                     balance,
                     charged,
