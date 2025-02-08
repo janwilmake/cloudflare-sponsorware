@@ -2,7 +2,7 @@ name = "sponsorflare"
 main = "main.ts"
 compatibility_date = "2025-01-25"
 assets.directory = "./"
-
+dev.port = 3000
 routes = [
   { pattern = "sponsorflare.com", custom_domain = true },
   { pattern = "www.sponsorflare.com", custom_domain = true }

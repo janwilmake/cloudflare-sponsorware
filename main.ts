@@ -56,12 +56,43 @@ export default {
                 <h1
                   class="text-5xl font-bold mb-6 bg-gradient-to-r from-orange-400 to-amber-400 bg-clip-text text-transparent"
                 >
-                  AI Agent Monetisation in 3 Lines of Code
+                  Monetize Your Cloudflare AI Agents
                 </h1>
                 <p class="text-2xl text-slate-300 mb-8">
-                  Charge users to use your AI Agent Tools built with Cloudflare
-                  Workers by having them login to GitHub and sponsor you.
+                  You build AI Agents on Cloudflare Workers, we make sure your
+                  users can pay.
                 </p>
+
+                <ol class="max-w-md mx-auto text-left space-y-4 mb-8">
+                  <li class="flex items-center space-x-3">
+                    <span
+                      class="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-orange-500 text-white font-medium"
+                      >1</span
+                    >
+                    <span class="text-slate-300"
+                      >Set up your AI Agent in Cloudflare Workers</span
+                    >
+                  </li>
+                  <li class="flex items-center space-x-3">
+                    <span
+                      class="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-orange-500 text-white font-medium"
+                      >2</span
+                    >
+                    <span class="text-slate-300"
+                      >User logs in via Github and sponsors you</span
+                    >
+                  </li>
+                  <li class="flex items-center space-x-3">
+                    <span
+                      class="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full bg-orange-500 text-white font-medium"
+                      >3</span
+                    >
+                    <span class="text-slate-300"
+                      >Now they automatically pay per use</span
+                    >
+                  </li>
+                </ol>
+
                 <div class="flex justify-center gap-4">
                   ${is_authenticated
                     ? html`
@@ -207,6 +238,10 @@ export default {
                   `
                 : html`
                     <!-- Features Grid -->
+                    <p class="text-orange-300 font-bold text-right italic">
+                      Just 3 Lines of Code!
+                    </p>
+
                     <!-- Code Showcase -->
                     <div class="bg-slate-800 p-8 rounded-xl mb-20">
                       <pre class="overflow-x-auto">
