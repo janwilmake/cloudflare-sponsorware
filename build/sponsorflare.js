@@ -611,6 +611,8 @@ export const getSponsor = async (request, env, config) => {
         return {
             is_authenticated: true,
             ...sponsorData,
+            access_token,
+            scope,
             balance,
             charged,
         };
