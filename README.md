@@ -188,7 +188,7 @@ Because we're not using a global database but a separate database per user, the 
 - Create `admin.html` that queries `/users.json`
 - Create function that, for all users, updates the user data for a sponsor to the most recent values.
 
-Ideas (Backlog):
+### Ideas (Backlog):
 
 - Sponsorflare Dashboard should be prettier. Ideally, the bar width is adjusted to the screen size and amount of bars.
 - Additional mapping from a global KV-stored sponsorflare-access-token to a user_id + access_token + scope. This way it remains fast as KV is replicated globally, while it also makes it easier to authenticate, since we don't need to set 3 different cookies/headers.
