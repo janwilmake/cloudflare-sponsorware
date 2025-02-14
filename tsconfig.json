@@ -1,5 +1,10 @@
 {
-  "include": ["./sponsorflare.ts", "./main.ts", "./user-todo-example.ts"],
+  "include": [
+    "./sponsorflare.ts",
+    "./main.ts",
+    "./user-todo-example.ts",
+    "./stats.ts"
+  ],
   "compilerOptions": {
     "lib": ["ESNext"],
     "target": "ESNext",

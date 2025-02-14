@@ -31,6 +31,10 @@ export type Sponsor = {
     owner_login: string;
     /** github avatar url */
     avatar_url?: string;
+    blog?: string | null;
+    bio?: string | null;
+    email?: string | null;
+    twitter_username?: string | null;
     /** true if the user has ever sponsored */
     is_sponsor?: boolean;
     /** total money the user has paid, in cents */
@@ -39,6 +43,9 @@ export type Sponsor = {
     spent?: number;
     /** (clv-spent)/100 = balance (in usd) */
     balance?: number;
+    /** Updated every time the user is verified through one of their access tokens */
+    updatedAt?: number;
+    createdAt?: number;
 };
 interface ViewerData {
     monthlyEstimatedSponsorsIncomeInCents: number;

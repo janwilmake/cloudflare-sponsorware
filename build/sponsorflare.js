@@ -1,3 +1,67 @@
+const initializeUser = async (access_token, source, scope) => {
+    // Fetch user data (keep existing code)
+    const userResponse = await fetch("https://api.github.com/user", {
+        headers: {
+            Authorization: `Bearer ${access_token}`,
+            "User-Agent": "Cloudflare-Workers",
+        },
+    });
+    if (!userResponse.ok) {
+        return { error: await userResponse.text(), status: userResponse.status };
+    }
+    const userData = await userResponse.json();
+    let email = undefined;
+    try {
+        const emailsResponse = await fetch("https://api.github.com/user/emails", {
+            headers: {
+                Authorization: `Bearer ${access_token}`,
+                "User-Agent": "Cloudflare-Workers",
+            },
+        });
+        if (emailsResponse.ok) {
+            const emails = await emailsResponse.json();
+            const primaryEmail = emails.find((x) => x.primary && x.verified)?.email ||
+                emails.find((x) => x.verified)?.email;
+            email = primaryEmail;
+        }
+    }
+    catch { }
+    // Create sponsor object
+    const sponsorData = {
+        owner_id: userData.id.toString(),
+        owner_login: userData.login,
+        avatar_url: userData.avatar_url,
+        blog: userData.blog,
+        bio: userData.bio,
+        twitter_username: userData.twitter_username,
+        is_authenticated: true,
+        email,
+        source,
+        updatedAt: Date.now(),
+    };
+    // Get Durable Object instance
+    const id = env.SPONSOR_DO.idFromName(userData.id.toString());
+    const stub = env.SPONSOR_DO.get(id);
+    // Initialize the Durable Object with sponsor data and access token
+    const initResponse = await stub.fetch(new Request("http://fake-host/initialize", {
+        method: "POST",
+        body: JSON.stringify({
+            sponsor: sponsorData,
+            access_token,
+            scope,
+            source,
+        }),
+    }));
+    if (!initResponse.ok) {
+        return { error: await initResponse.text(), status: initResponse.status };
+    }
+    return {
+        status: 200,
+        userData,
+        sponsorData,
+        owner_id: userData.id.toString(),
+    };
+};
 export class SponsorDO {
     state;
     storage;
@@ -15,7 +79,7 @@ export class SponsorDO {
                     noCache: true,
                 });
                 await this.storage.put("sponsor", {
-                    ...(already || {}),
+                    ...(already || { createdAt: Date.now() }),
                     ...initData.sponsor,
                 }, { noCache: true, allowUnconfirmed: false });
                 if (initData.access_token) {
@@ -26,13 +90,30 @@ export class SponsorDO {
                     });
                 }
                 return new Response("Initialized", { status: 200 });
+            case "/user": {
+                const sponsor = await this.storage.get("sponsor");
+                if (!sponsor) {
+                    return new Response("Not found", { status: 404 });
+                }
+                return new Response(JSON.stringify(sponsor), {
+                    status: 200,
+                    headers: { "Content-Type": "application/json" },
+                });
+            }
             case "/verify":
+                // Endpoint used to check if a user uses a token
                 const access_token = url.searchParams.get("token");
                 const tokenData = await this.storage.get(access_token);
                 if (!tokenData) {
                     return new Response("Invalid token", { status: 401 });
                 }
                 const sponsor = await this.storage.get("sponsor");
+                if (sponsor) {
+                    await this.storage.put("sponsor", {
+                        ...sponsor,
+                        updatedAt: Date.now(),
+                    });
+                }
                 return new Response(JSON.stringify(sponsor), {
                     status: 200,
                     headers: { "Content-Type": "application/json" },
@@ -294,7 +375,7 @@ async function generateRandomString(length) {
 const callbackGetAccessToken = async (request, env) => {
     const url = new URL(request.url);
     if (env.SKIP_LOGIN === "true") {
-        return { access_token: env.GITHUB_PAT, scope: "repo,user" };
+        return { access_token: env.GITHUB_PAT, scope: "repo user" };
     }
     // Get the state from URL and cookies
     const urlState = url.searchParams.get("state");
@@ -406,6 +487,7 @@ export const middleware = async (request, env) => {
                     avatar_url: sponsor.avatarUrl,
                     is_sponsor: true,
                     clv: sponsor.amountInCents,
+                    updatedAt: Date.now(),
                 };
                 // Add update promise to array
                 updatePromises.push(stub.fetch(new Request("http://fake-host/initialize", {
@@ -432,6 +514,7 @@ export const middleware = async (request, env) => {
         }
     }
     if (url.pathname === "/set-credit") {
+        // admin endpoint
         return setCredit(request, env);
     }
     if (url.pathname === "/login") {
@@ -467,38 +550,13 @@ export const middleware = async (request, env) => {
                     status,
                 });
             }
-            // Fetch user data (keep existing code)
-            const userResponse = await fetch("https://api.github.com/user", {
-                headers: {
-                    Authorization: `Bearer ${access_token}`,
-                    "User-Agent": "Cloudflare-Workers",
-                },
-            });
-            if (!userResponse.ok)
-                throw new Error("Failed to fetch user info");
-            const userData = await userResponse.json();
-            const source = redirectUriCookie;
-            // Create sponsor object
-            const sponsorData = {
-                owner_id: userData.id.toString(),
-                owner_login: userData.login,
-                avatar_url: userData.avatar_url,
-                is_authenticated: true,
-                source,
-            };
-            // Get Durable Object instance
-            const id = env.SPONSOR_DO.idFromName(userData.id.toString());
-            const stub = env.SPONSOR_DO.get(id);
-            // Initialize the Durable Object with sponsor data and access token
-            await stub.fetch(new Request("http://fake-host/initialize", {
-                method: "POST",
-                body: JSON.stringify({
-                    sponsor: sponsorData,
-                    access_token,
-                    scope,
-                    source,
-                }),
-            }));
+            const initialized = await initializeUser(access_token, redirectUriCookie, scope);
+            if (initialized.error || !initialized.userData) {
+                return new Response(initialized.error, {
+                    status: initialized.status,
+                });
+            }
+            const { sponsorData, userData } = initialized;
             // Create response with cookies
             const headers = new Headers({
                 Location: redirectUriCookie || env.LOGIN_REDIRECT_URI || "/",
@@ -534,7 +592,7 @@ export const middleware = async (request, env) => {
               <h1>Login Failed</h1>
               <p>Unable to complete authentication.</p>
               <script>
-                alert("Login failed");
+                alert("Login failed" + ${error.message});
                 window.location.href = "/";
               </script>
             </body>
@@ -552,7 +610,7 @@ export const middleware = async (request, env) => {
 };
 // Update the getSponsor function
 export const getSponsor = async (request, env, config) => {
-    const { owner_id, access_token, scope } = getCookies(request);
+    let { owner_id, access_token, scope } = getCookies(request);
     if (!owner_id || !access_token) {
         return {
             is_authenticated: false,
@@ -564,18 +622,35 @@ export const getSponsor = async (request, env, config) => {
     try {
         // Get Durable Object instance
         const id = env.SPONSOR_DO.idFromName(owner_id);
-        const stub = env.SPONSOR_DO.get(id);
+        let stub = env.SPONSOR_DO.get(id);
         // Verify access token and get sponsor data
         const verifyResponse = await stub.fetch(`http://fake-host/verify?token=${encodeURIComponent(access_token)}`);
-        if (!verifyResponse.ok) {
-            return {
-                is_authenticated: false,
-                charged: false,
-                access_token,
-                scope,
-            };
+        let sponsorData;
+        if (verifyResponse.ok) {
+            sponsorData = await verifyResponse.json();
         }
-        const sponsorData = await verifyResponse.json();
+        else {
+            const initialized = await initializeUser(access_token, request.url, scope || undefined);
+            if (!initialized.userData ||
+                initialized.error ||
+                !initialized.sponsorData) {
+                return {
+                    is_authenticated: false,
+                    charged: false,
+                    access_token,
+                    scope,
+                };
+            }
+            // this is the verified owner_id from the access_token from the API
+            if (initialized.owner_id !== owner_id) {
+                owner_id = initialized.owner_id;
+                const id = env.SPONSOR_DO.idFromName(owner_id);
+                //owerwrite stub to prevent corrupt data
+                stub = env.SPONSOR_DO.get(id);
+            }
+            sponsorData = initialized.sponsorData;
+        }
+        // now we have sponsordata, even if this access token wasn't in the db yet.
         // Handle charging if required
         let charged = false;
         const balanceCents = (sponsorData.clv || 0) - (sponsorData.spent || 0);
@@ -629,11 +704,11 @@ export const getCookies = (request) => {
     const ownerIdCookie = rows?.find((row) => row.startsWith("owner_id="));
     const owner_id = ownerIdCookie
         ? decodeURIComponent(ownerIdCookie.split("=")[1].trim())
-        : null;
+        : request.headers.get("x-owner-id");
     const scopeCookie = rows?.find((row) => row.startsWith("github_oauth_scope="));
     const scope = scopeCookie
         ? decodeURIComponent(scopeCookie.split("=")[1].trim())
-        : null;
+        : request.headers.get("x-scope");
     const authCookie = rows?.find((row) => row.startsWith("authorization="));
     const authorization = authCookie
         ? decodeURIComponent(authCookie.split("=")[1].trim())

@@ -171,9 +171,11 @@ Because we're not using a global database but a separate database per user, the 
 
 ✅ Created a `proxy` and an example to use it, in which we can keep a todo database per user. See: [user-todo-example.ts](user-todo-example.ts)
 
-## TODO
+## 2025-02-14 QOL updates
 
-- Ensure to store email in the DB
+- ✅ due to the fact that remote do doesnt contain the same state as locally, we now can't authenticate in sponsorflare remotely from localhost. this can be resolved by, in sponsorflare, checking and adding an unknown auth token, if owner_id was provided
+- ✅ Ensure to store email in the DB
+- Query all logged in sponsorflare users, get their emails, and send them all a custom email (BCC).
 - Store transactions in SQL rather than KV (easier to query)
 - Store more things like activity
 - To list all items in the namespace, we can use either https://developers.cloudflare.com/api/resources/durable_objects/subresources/namespaces/subresources/objects/methods/list/ or we could add a master DO that keeps track of it. Let's try a master DO that simply we write to each time we execute a query, but in waitUntil, such that it's a direct clone of all stuff together, but it doesn't slow stuff down.

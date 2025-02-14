@@ -4,3 +4,7 @@ We actually need webhooks at our sponsors dashboard!
 https://docs.github.com/en/sponsors/integrating-with-github-sponsors/configuring-webhooks-for-events-in-your-sponsored-account
 
 For retrieving clv we need the graphql API.
+
+# Redirect uris with newlines
+
+This won't work as new lines cannot be put in header and this breaks sponsorflare
