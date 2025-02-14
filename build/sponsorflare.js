@@ -62,6 +62,7 @@ const initializeUser = async (access_token, source, scope) => {
         owner_id: userData.id.toString(),
     };
 };
+export { stats } from "./stats";
 export class SponsorDO {
     state;
     storage;

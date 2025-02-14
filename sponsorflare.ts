@@ -225,6 +225,7 @@ const initializeUser = async (
   };
 };
 
+export { stats } from "./stats";
 export class SponsorDO {
   private state: DurableObjectState;
   private storage: DurableObjectStorage;

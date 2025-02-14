@@ -1,5 +1,11 @@
-import { Env } from "./sponsorflare";
-declare const _default: {
-    fetch(request: Request, env: Env): Promise<Response>;
-};
-export default _default;
+/** Retrieve stats for your durable objects namespace. This function iterates over all durable objects in the namespace and retrieves the user info */
+export declare const stats: (accountId: string, namespaceId: string, cloudflareApiKey: string) => Promise<{
+    status: number;
+    results?: {
+        id: string;
+        hasStoredData: boolean;
+        userData?: any;
+        error?: string;
+    }[];
+    error?: string;
+}>;

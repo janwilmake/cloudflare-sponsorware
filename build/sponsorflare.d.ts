@@ -63,6 +63,7 @@ interface ViewerData {
         id?: string;
     }[];
 }
+export { stats } from "./stats";
 export declare class SponsorDO {
     private state;
     private storage;
@@ -116,4 +117,3 @@ Example: see `user-todo-example.ts`
 export declare const proxy: (DO_NAME: string) => (request: Request, env: Env & {
     [doName: string]: DurableObjectNamespace;
 }) => Promise<Response>;
-export {};
