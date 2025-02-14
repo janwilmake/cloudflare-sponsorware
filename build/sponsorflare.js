@@ -1,4 +1,4 @@
-const initializeUser = async (access_token, source, scope) => {
+const initializeUser = async (env, access_token, source, scope) => {
     // Fetch user data (keep existing code)
     const userResponse = await fetch("https://api.github.com/user", {
         headers: {
@@ -514,10 +514,6 @@ export const middleware = async (request, env) => {
             });
         }
     }
-    if (url.pathname === "/set-credit") {
-        // admin endpoint
-        return setCredit(request, env);
-    }
     if (url.pathname === "/login") {
         const scope = url.searchParams.get("scope");
         if (env.SKIP_LOGIN === "true") {
@@ -551,7 +547,7 @@ export const middleware = async (request, env) => {
                     status,
                 });
             }
-            const initialized = await initializeUser(access_token, redirectUriCookie, scope);
+            const initialized = await initializeUser(env, access_token, redirectUriCookie, scope);
             if (initialized.error || !initialized.userData) {
                 return new Response(initialized.error, {
                     status: initialized.status,
@@ -631,7 +627,7 @@ export const getSponsor = async (request, env, config) => {
             sponsorData = await verifyResponse.json();
         }
         else {
-            const initialized = await initializeUser(access_token, request.url, scope || undefined);
+            const initialized = await initializeUser(env, access_token, request.url, scope || undefined);
             if (!initialized.userData ||
                 initialized.error ||
                 !initialized.sponsorData) {

@@ -135,6 +135,7 @@ interface SponsorEvent {
 }
 
 const initializeUser = async (
+  env: Env,
   access_token: string,
   source?: string,
   scope?: string,
@@ -907,6 +908,7 @@ export const middleware = async (request: Request, env: Env) => {
       }
 
       const initialized = await initializeUser(
+        env,
         access_token,
         redirectUriCookie,
         scope,
@@ -978,10 +980,7 @@ export const middleware = async (request: Request, env: Env) => {
             <body>
               <h1>Login Failed</h1>
               <p>Unable to complete authentication.</p>
-              <script>
-                alert("Login failed" + ${error.message});
-                window.location.href = "/";
-              </script>
+              <p>${error.message}</p>
             </body>
           </html>
         `,
@@ -1042,6 +1041,7 @@ export const getSponsor = async (
       sponsorData = await verifyResponse.json();
     } else {
       const initialized = await initializeUser(
+        env,
         access_token,
         request.url,
         scope || undefined,

@@ -179,6 +179,7 @@ Because we're not using a global database but a separate database per user, the 
 - ✅ To list all items in the namespace, use https://developers.cloudflare.com/api/resources/durable_objects/subresources/namespaces/subresources/objects/methods/list/ and retrieve "sponsor" from storage.
 - ✅ Store more things like activity
 - ✅ Created openapi to understand the endpoints in the middleware
+- Sponsorflare fix oauth. Now errors
 - Also track the access_token last use.
 - `/users.json` admin endpoint: returns all users. Cache JSON for 1 day stale-while-revalidate (so its fast and efficient)
 - Create `admin.html` that queries `/users.json`
@@ -188,4 +189,5 @@ Ideas:
 
 - Additional mapping from a global KV-stored sponsorflare-access-token to a user_id + access_token + scope. This way it remains fast as KV is replicated globally, while it also makes it easier to authenticate, since we don't need to set 3 different cookies/headers.
 - Store transactions in SQL rather than KV (easier to query)
-- Idea: Add master DO that keeps track of user info. Let's try a master DO that simply we write to each time we execute a query, but in waitUntil, such that it's a direct clone of all stuff together, but it doesn't slow stuff down.
+- Idea: Currently, fetching all users requires 1 subrequest per user, which can be problematic. We need a master DO that keeps track of user info. Let's try a master DO that simply we write to each time we execute a query, but in waitUntil, such that it's a direct clone of all stuff together, but it doesn't slow stuff down.
+- If that's too slow, another way is with alarms. Each time a DO is activated, it can set an alarm (if not already) to back up itself to the master DO, within an hour.
