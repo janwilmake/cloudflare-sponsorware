@@ -849,11 +849,6 @@ export const middleware = async (request: Request, env: Env) => {
     }
   }
 
-  if (url.pathname === "/set-credit") {
-    // admin endpoint
-    return setCredit(request, env);
-  }
-
   if (url.pathname === "/login") {
     const scope = url.searchParams.get("scope");
     if (env.SKIP_LOGIN === "true") {

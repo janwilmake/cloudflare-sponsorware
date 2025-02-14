@@ -174,8 +174,17 @@ Because we're not using a global database but a separate database per user, the 
 ## 2025-02-14 QOL updates
 
 - ✅ due to the fact that remote do doesnt contain the same state as locally, we now can't authenticate in sponsorflare remotely from localhost. this can be resolved by, in sponsorflare, checking and adding an unknown auth token, if owner_id was provided
-- ✅ Ensure to store email in the DB
-- Query all logged in sponsorflare users, get their emails, and send them all a custom email (BCC).
+- ✅ Ensure to store email in the DB as well as bio, twitter username, blog.
+- ✅ Add ability to track created at, and last verified date
+- ✅ To list all items in the namespace, use https://developers.cloudflare.com/api/resources/durable_objects/subresources/namespaces/subresources/objects/methods/list/ and retrieve "sponsor" from storage.
+- ✅ Store more things like activity
+- Also track the access_token last use.
+- `/users.json` admin endpoint: returns all users. Cache JSON for 1 day stale-while-revalidate (so its fast and efficient)
+- Create `admin.html` that queries `/users.json`
+- Create function that, for all users, updates the user data for a sponsor to the most recent values.
+
+Ideas:
+
+- Additional mapping from a global KV-stored sponsorflare-access-token to a user_id + access_token + scope. This way it remains fast as KV is replicated globally, while it also makes it easier to authenticate, since we don't need to set 3 different cookies/headers.
 - Store transactions in SQL rather than KV (easier to query)
-- Store more things like activity
-- To list all items in the namespace, we can use either https://developers.cloudflare.com/api/resources/durable_objects/subresources/namespaces/subresources/objects/methods/list/ or we could add a master DO that keeps track of it. Let's try a master DO that simply we write to each time we execute a query, but in waitUntil, such that it's a direct clone of all stuff together, but it doesn't slow stuff down.
+- Idea: Add master DO that keeps track of user info. Let's try a master DO that simply we write to each time we execute a query, but in waitUntil, such that it's a direct clone of all stuff together, but it doesn't slow stuff down.

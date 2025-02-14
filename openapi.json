@@ -1,0 +1,375 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "GitHub Sponsorship API",
+    "version": "1.0.0",
+    "description": "API for managing GitHub sponsorships and user authentication"
+  },
+  "servers": [
+    {
+      "url": "https://sponsorflare.com",
+      "description": "Production server"
+    }
+  ],
+  "components": {
+    "schemas": {
+      "Sponsor": {
+        "type": "object",
+        "properties": {
+          "is_authenticated": {
+            "type": "boolean",
+            "description": "Whether the sponsor has ever authenticated"
+          },
+          "source": {
+            "type": "string",
+            "description": "URL where the user first authenticated"
+          },
+          "owner_id": {
+            "type": "string",
+            "description": "GitHub node ID of the user"
+          },
+          "owner_login": {
+            "type": "string",
+            "description": "GitHub username"
+          },
+          "avatar_url": {
+            "type": "string",
+            "description": "GitHub avatar URL"
+          },
+          "blog": {
+            "type": "string",
+            "nullable": true
+          },
+          "bio": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "twitter_username": {
+            "type": "string",
+            "nullable": true
+          },
+          "is_sponsor": {
+            "type": "boolean",
+            "description": "Whether the user has ever sponsored"
+          },
+          "clv": {
+            "type": "number",
+            "description": "Total money paid in cents"
+          },
+          "spent": {
+            "type": "number",
+            "description": "Total money spent in cents"
+          },
+          "balance": {
+            "type": "number",
+            "description": "(clv-spent)/100 = balance in USD"
+          },
+          "updatedAt": {
+            "type": "number",
+            "description": "Last update timestamp"
+          },
+          "createdAt": {
+            "type": "number",
+            "description": "Creation timestamp"
+          }
+        }
+      },
+      "Usage": {
+        "type": "object",
+        "properties": {
+          "totalAmount": {
+            "type": "number",
+            "description": "Total amount in dollars"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "description": "Usage date in YYYY-MM-DD format"
+          },
+          "hostname": {
+            "type": "string",
+            "description": "Hostname where usage occurred"
+          },
+          "count": {
+            "type": "number",
+            "description": "Number of usage events"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Error message"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "GitHub OAuth access token"
+      },
+      "cookieAuth": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "authorization"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": [],
+      "cookieAuth": []
+    }
+  ],
+  "paths": {
+    "/login": {
+      "get": {
+        "summary": "Initialize GitHub OAuth login",
+        "description": "Redirects user to GitHub OAuth authorization page",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "OAuth scope requested"
+          },
+          {
+            "name": "redirect_uri",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "URI to redirect after login"
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Redirect to GitHub OAuth",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "GitHub OAuth URL"
+              },
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "OAuth state cookie"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/callback": {
+      "get": {
+        "summary": "GitHub OAuth callback",
+        "description": "Handles OAuth callback from GitHub",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "OAuth code from GitHub"
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "OAuth state parameter"
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Successful authentication",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Redirect URL"
+              },
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Authentication cookies"
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/logout": {
+      "get": {
+        "summary": "Logout user",
+        "description": "Clears authentication cookies",
+        "parameters": [
+          {
+            "name": "redirect_uri",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "URI to redirect after logout"
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Successful logout",
+            "headers": {
+              "Location": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Redirect URL"
+              },
+              "Set-Cookie": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Clear cookies"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/github-webhook": {
+      "post": {
+        "summary": "GitHub webhook endpoint",
+        "description": "Handles GitHub sponsorship events",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook processed successfully"
+          },
+          "400": {
+            "description": "Invalid signature or payload"
+          },
+          "401": {
+            "description": "Missing webhook secret"
+          }
+        }
+      }
+    },
+    "/set-credit": {
+      "post": {
+        "summary": "Set user credit",
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "clv",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number"
+            },
+            "description": "New credit value in cents"
+          },
+          {
+            "name": "apiKey",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Credit updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Sponsor"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid parameters"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    },
+    "/usage": {
+      "get": {
+        "summary": "Get user usage data",
+        "description": "Retrieves usage statistics for authenticated user",
+        "responses": {
+          "200": {
+            "description": "Usage data retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "usage": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Usage"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        }
+      }
+    }
+  }
+}
