@@ -178,6 +178,7 @@ Because we're not using a global database but a separate database per user, the 
 - ✅ Add ability to track created at, and last verified date
 - ✅ To list all items in the namespace, use https://developers.cloudflare.com/api/resources/durable_objects/subresources/namespaces/subresources/objects/methods/list/ and retrieve "sponsor" from storage.
 - ✅ Store more things like activity
+- ✅ Created openapi to understand the endpoints in the middleware
 - Also track the access_token last use.
 - `/users.json` admin endpoint: returns all users. Cache JSON for 1 day stale-while-revalidate (so its fast and efficient)
 - Create `admin.html` that queries `/users.json`
