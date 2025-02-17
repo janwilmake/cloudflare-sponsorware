@@ -195,3 +195,4 @@ Because we're not using a global database but a separate database per user, the 
 - `/usage` is now slow. Store transactions in SQL rather than KV (more efficient to query)
 - Idea: Currently, fetching all users requires 1 subrequest per user, which can be problematic. We need a master DO that keeps track of user info. Let's try a master DO that simply we write to each time we execute a query, but in waitUntil, such that it's a direct clone of all stuff together, but it doesn't slow stuff down.
 - If that's too slow, another way is with alarms. Each time a DO is activated, it can set an alarm (if not already) to back up itself to the master DO, within an hour.
+- Builtin Unauthenticated Ratelimiting per IP; useful, but this is completely separate so can as well be a completely separate thing.
