@@ -768,9 +768,12 @@ export const middleware = async (request: Request, env: Env) => {
 
   if (url.pathname === "/logout") {
     const redirect_uri = url.searchParams.get("redirect_uri");
-    const securePart = env.SKIP_LOGIN === "true" ? "" : " Secure;";
+    const skipLogin = env.SKIP_LOGIN === "true";
+    const securePart = skipLogin ? "" : " Secure;";
     const domainPart =
-      env.COOKIE_DOMAIN_SHARING === "true" ? ` Domain=${domain};` : "";
+      env.COOKIE_DOMAIN_SHARING === "true" && !skipLogin
+        ? ` Domain=${domain};`
+        : "";
 
     const headers = new Headers({ Location: redirect_uri || "/" });
     headers.append(
