@@ -133,6 +133,39 @@ interface SponsorEvent {
   sender: User;
   sponsorship: Sponsorship;
 }
+type CookieValue = {
+  access_token: string;
+  owner_id: number;
+  scope: string;
+};
+function createCookieSafeToken(data: CookieValue) {
+  // Base64Url encode
+  const token = btoa(JSON.stringify(data))
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
+
+  // Additional URL encoding for cookie safety
+  return encodeURIComponent(token);
+}
+
+function parseCookieSafeToken(cookieValue: string): CookieValue | undefined {
+  try {
+    // Decode the URL encoding
+    const token = decodeURIComponent(cookieValue);
+
+    // Add padding if needed for base64 decoding
+    const padded = token.replace(/-/g, "+").replace(/_/g, "/");
+    const pad = padded.length % 4;
+    const fullPadded = pad ? padded + "=".repeat(4 - pad) : padded;
+
+    // Decode and parse
+    return JSON.parse(atob(fullPadded));
+  } catch (e) {
+    // could not be parsed; invalid token
+    return;
+  }
+}
 
 const initializeUser = async (
   env: Env,
@@ -745,16 +778,6 @@ export const middleware = async (request: Request, env: Env) => {
       `authorization=;${domainPart} HttpOnly; Path=/;${securePart} Max-Age=0; SameSite=Lax`,
     );
 
-    headers.append(
-      "Set-Cookie",
-      `owner_id=;${domainPart} HttpOnly; Path=/;${securePart} Max-Age=0; SameSite=Lax`,
-    );
-
-    headers.append(
-      "Set-Cookie",
-      `github_oauth_scope=;${domainPart} HttpOnly; Path=/;${securePart} Max-Age=0; SameSite=Lax`,
-    );
-
     return new Response("Redirecting", { status: 302, headers });
   }
 
@@ -935,22 +958,16 @@ export const middleware = async (request: Request, env: Env) => {
           ? ` Domain=${domain};`
           : "";
       const cookieSuffix = `;${domainPart} HttpOnly; Path=/;${securePart} Max-Age=34560000; SameSite=Lax`;
-      console.log({ cookieSuffix });
-      headers.append(
-        "Set-Cookie",
-        `authorization=${encodeURIComponent(
-          `Bearer ${access_token}`,
-        )}${cookieSuffix}`,
-      );
+
+      const bearerToken = createCookieSafeToken({
+        access_token,
+        owner_id: userData.id,
+        scope,
+      });
 
       headers.append(
         "Set-Cookie",
-        `owner_id=${encodeURIComponent(userData.id.toString())}${cookieSuffix}`,
-      );
-
-      headers.append(
-        "Set-Cookie",
-        `github_oauth_scope=${encodeURIComponent(scope)}${cookieSuffix}`,
+        `authorization=Bearer%20${bearerToken}${cookieSuffix}`,
       );
 
       headers.append(
@@ -1016,7 +1033,7 @@ export const getSponsor = async (
     scope?: string | null;
   } & Partial<Sponsor>
 > => {
-  let { owner_id, access_token, scope } = getCookies(request);
+  const { owner_id, access_token, scope } = getAuthorization(request);
   if (!owner_id || !access_token) {
     return {
       is_authenticated: false,
@@ -1025,10 +1042,11 @@ export const getSponsor = async (
       scope,
     };
   }
+  let ownerIdString = String(owner_id);
 
   try {
     // Get Durable Object instance
-    const id = env.SPONSOR_DO.idFromName(owner_id);
+    const id = env.SPONSOR_DO.idFromName(ownerIdString);
     let stub = env.SPONSOR_DO.get(id);
 
     // Verify access token and get sponsor data
@@ -1061,9 +1079,9 @@ export const getSponsor = async (
       }
 
       // this is the verified owner_id from the access_token from the API
-      if (initialized.owner_id !== owner_id) {
-        owner_id = initialized.owner_id;
-        const id = env.SPONSOR_DO.idFromName(owner_id);
+      if (initialized.owner_id !== ownerIdString) {
+        ownerIdString = initialized.owner_id;
+        const id = env.SPONSOR_DO.idFromName(ownerIdString);
         //owerwrite stub to prevent corrupt data
         stub = env.SPONSOR_DO.get(id);
       }
@@ -1128,43 +1146,45 @@ export const getSponsor = async (
   }
 };
 
-export const getCookies = (request: Request) => {
+/**
+ * Parses authorization details from the cookie, header, or query
+ */
+export const getAuthorization = (request: Request) => {
   // Get owner_id and authorization from cookies
   const cookie = request.headers.get("Cookie");
   const rows = cookie?.split(";").map((x) => x.trim());
 
-  const ownerIdCookie = rows?.find((row) => row.startsWith("owner_id="));
-  const owner_id = ownerIdCookie
-    ? decodeURIComponent(ownerIdCookie.split("=")[1].trim())
-    : request.headers.get("x-owner-id");
-
-  const scopeCookie = rows?.find((row) =>
-    row.startsWith("github_oauth_scope="),
-  );
-  const scope = scopeCookie
-    ? decodeURIComponent(scopeCookie.split("=")[1].trim())
-    : request.headers.get("x-scope");
-
   const authCookie = rows?.find((row) => row.startsWith("authorization="));
-  const authorization = authCookie
-    ? decodeURIComponent(authCookie.split("=")[1].trim())
-    : request.headers.get("authorization");
 
-  const access_token = authorization
-    ? authorization.slice("Bearer ".length)
-    : new URL(request.url).searchParams.get("apiKey");
+  // query, cookie, or header
+  const authorization =
+    new URL(request.url).searchParams.get("apiKey") ||
+    authCookie?.split("=Bearer%20")[1].trim() ||
+    request.headers.get("authorization")?.slice("Bearer ".length);
+
+  if (!authorization) {
+    return {};
+  }
+
+  const parse = parseCookieSafeToken(authorization);
+  if (!parse) {
+    return {};
+  }
+
+  const { access_token, scope, owner_id } = parse;
+
   return { scope, owner_id, access_token };
 };
 
 export const getUsage = async (request: Request, env: Env) => {
-  const { owner_id, access_token } = getCookies(request);
+  const { owner_id, access_token } = getAuthorization(request);
   if (!owner_id || !access_token) {
     return { error: "No access" };
   }
 
   try {
     // Get Durable Object instance
-    const id = env.SPONSOR_DO.idFromName(owner_id);
+    const id = env.SPONSOR_DO.idFromName(String(owner_id));
     const stub = env.SPONSOR_DO.get(id);
 
     // Verify access token and get sponsor data

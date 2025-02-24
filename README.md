@@ -181,6 +181,13 @@ Because we're not using a global database but a separate database per user, the 
 - ✅ Created openapi to understand the endpoints in the middleware
 - ✅ Sponsorflare fix oauth. Now errors.
 
+### Revamp
+
+- Central db sponsorflare
+- Allow for single access-token Authorization Bearer token (encoded other 3)
+- Store transactions in SQLite for easier retrieval
+- Update sponsorflare version everywhere
+
 ### Admin endpoint: Get all user data
 
 - Also track the "access_token" last use.
