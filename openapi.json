@@ -133,7 +133,7 @@
   "paths": {
     "/login": {
       "post": {
-        "summary": "Authenticate with GitHub access token",
+        "summary": "Programmatic PAT Login",
         "description": "Authenticate user with provided GitHub access token",
         "parameters": [
           {
@@ -165,7 +165,7 @@
       },
 
       "get": {
-        "summary": "Initialize GitHub OAuth login",
+        "summary": "Browser-based OAuth login",
         "description": "Redirects user to GitHub OAuth authorization page",
         "parameters": [
           {
