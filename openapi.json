@@ -132,6 +132,38 @@
   ],
   "paths": {
     "/login": {
+      "post": {
+        "summary": "Authenticate with GitHub access token",
+        "description": "Authenticate user with provided GitHub access token",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "GitHub access token for authentication"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authentication successful. The access token is returned in the body (string)",
+            "content": {
+              "text/plain": {
+                "schema": { "type": "string" }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid GitHub access token",
+            "content": {
+              "text/plain": { "schema": { "type": "string" } }
+            }
+          }
+        }
+      },
+
       "get": {
         "summary": "Initialize GitHub OAuth login",
         "description": "Redirects user to GitHub OAuth authorization page",

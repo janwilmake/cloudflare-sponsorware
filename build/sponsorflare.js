@@ -1,4 +1,29 @@
-const initializeUser = async (env, access_token, source, scope) => {
+export function createCookieSafeToken(data) {
+    // Base64Url encode
+    const token = btoa(JSON.stringify(data))
+        .replace(/=/g, "")
+        .replace(/\+/g, "-")
+        .replace(/\//g, "_");
+    // Additional URL encoding for cookie safety
+    return encodeURIComponent(token);
+}
+export function parseCookieSafeToken(cookieValue) {
+    try {
+        // Decode the URL encoding
+        const token = decodeURIComponent(cookieValue);
+        // Add padding if needed for base64 decoding
+        const padded = token.replace(/-/g, "+").replace(/_/g, "/");
+        const pad = padded.length % 4;
+        const fullPadded = pad ? padded + "=".repeat(4 - pad) : padded;
+        // Decode and parse
+        return JSON.parse(atob(fullPadded));
+    }
+    catch (e) {
+        // could not be parsed; invalid token
+        return;
+    }
+}
+const initializeUser = async (env, access_token, source) => {
     // Fetch user data (keep existing code)
     const userResponse = await fetch("https://api.github.com/user", {
         headers: {
@@ -9,6 +34,7 @@ const initializeUser = async (env, access_token, source, scope) => {
     if (!userResponse.ok) {
         return { error: await userResponse.text(), status: userResponse.status };
     }
+    const responseScope = userResponse.headers.get("X-OAuth-Scopes");
     const userData = await userResponse.json();
     let email = undefined;
     try {
@@ -48,7 +74,7 @@ const initializeUser = async (env, access_token, source, scope) => {
         body: JSON.stringify({
             sponsor: sponsorData,
             access_token,
-            scope,
+            scope: responseScope,
             source,
         }),
     }));
@@ -59,7 +85,8 @@ const initializeUser = async (env, access_token, source, scope) => {
         status: 200,
         userData,
         sponsorData,
-        owner_id: userData.id.toString(),
+        scope: responseScope,
+        owner_id: userData.id,
     };
 };
 export { stats } from "./stats";
@@ -430,12 +457,13 @@ export const middleware = async (request, env) => {
     // Login page route
     if (url.pathname === "/logout") {
         const redirect_uri = url.searchParams.get("redirect_uri");
-        const securePart = env.SKIP_LOGIN === "true" ? "" : " Secure;";
-        const domainPart = env.COOKIE_DOMAIN_SHARING === "true" ? ` Domain=${domain};` : "";
+        const skipLogin = env.SKIP_LOGIN === "true";
+        const securePart = skipLogin ? "" : " Secure;";
+        const domainPart = env.COOKIE_DOMAIN_SHARING === "true" && !skipLogin
+            ? ` Domain=${domain};`
+            : "";
         const headers = new Headers({ Location: redirect_uri || "/" });
         headers.append("Set-Cookie", `authorization=;${domainPart} HttpOnly; Path=/;${securePart} Max-Age=0; SameSite=Lax`);
-        headers.append("Set-Cookie", `owner_id=;${domainPart} HttpOnly; Path=/;${securePart} Max-Age=0; SameSite=Lax`);
-        headers.append("Set-Cookie", `github_oauth_scope=;${domainPart} HttpOnly; Path=/;${securePart} Max-Age=0; SameSite=Lax`);
         return new Response("Redirecting", { status: 302, headers });
     }
     if (url.pathname === "/github-webhook" && request.method === "POST") {
@@ -514,7 +542,7 @@ export const middleware = async (request, env) => {
             });
         }
     }
-    if (url.pathname === "/login") {
+    if (request.method === "GET" && url.pathname === "/login") {
         const scope = url.searchParams.get("scope");
         if (env.SKIP_LOGIN === "true") {
             return new Response("Redirecting", {
@@ -538,6 +566,22 @@ export const middleware = async (request, env) => {
         // Create a response with HTTP-only state cookie
         return new Response("Redirecting", { status: 302, headers });
     }
+    if (request.method === "POST" && url.pathname === "/login") {
+        const github_access_token = url.searchParams.get("token");
+        if (!github_access_token) {
+            return new Response("Please, provide a github access token as ?token query parameter", { status: 400 });
+        }
+        const result = await initializeUser(env, github_access_token, url.origin);
+        if (!result.sponsorData?.owner_id || !result.scope) {
+            return new Response(result.error, { status: result.status });
+        }
+        const token = createCookieSafeToken({
+            access_token: github_access_token,
+            owner_id: Number(result.sponsorData.owner_id),
+            scope: result.scope,
+        });
+        return new Response(token, { status: 200 });
+    }
     // GitHub OAuth callback route
     if (url.pathname === "/callback") {
         try {
@@ -547,7 +591,7 @@ export const middleware = async (request, env) => {
                     status,
                 });
             }
-            const initialized = await initializeUser(env, access_token, redirectUriCookie, scope);
+            const initialized = await initializeUser(env, access_token, redirectUriCookie);
             if (initialized.error || !initialized.userData) {
                 return new Response(initialized.error, {
                     status: initialized.status,
@@ -565,10 +609,12 @@ export const middleware = async (request, env) => {
                 ? ` Domain=${domain};`
                 : "";
             const cookieSuffix = `;${domainPart} HttpOnly; Path=/;${securePart} Max-Age=34560000; SameSite=Lax`;
-            console.log({ cookieSuffix });
-            headers.append("Set-Cookie", `authorization=${encodeURIComponent(`Bearer ${access_token}`)}${cookieSuffix}`);
-            headers.append("Set-Cookie", `owner_id=${encodeURIComponent(userData.id.toString())}${cookieSuffix}`);
-            headers.append("Set-Cookie", `github_oauth_scope=${encodeURIComponent(scope)}${cookieSuffix}`);
+            const bearerToken = createCookieSafeToken({
+                access_token,
+                owner_id: userData.id,
+                scope,
+            });
+            headers.append("Set-Cookie", `authorization=Bearer%20${bearerToken}${cookieSuffix}`);
             headers.append("Set-Cookie", `github_oauth_state=;${domainPart} HttpOnly; Path=/;${securePart} Max-Age=0; SameSite=Lax`);
             headers.append("Set-Cookie", `redirect_uri=;${domainPart} HttpOnly; Path=/;${securePart} Max-Age=0; SameSite=Lax`);
             return new Response(`Redirecting to ${headers.get("location")}`, {
@@ -588,10 +634,7 @@ export const middleware = async (request, env) => {
             <body>
               <h1>Login Failed</h1>
               <p>Unable to complete authentication.</p>
-              <script>
-                alert("Login failed" + ${error.message});
-                window.location.href = "/";
-              </script>
+              <p>${error.message}</p>
             </body>
           </html>
         `, {
@@ -607,7 +650,7 @@ export const middleware = async (request, env) => {
 };
 // Update the getSponsor function
 export const getSponsor = async (request, env, config) => {
-    let { owner_id, access_token, scope } = getCookies(request);
+    const { owner_id, access_token, scope } = getAuthorization(request);
     if (!owner_id || !access_token) {
         return {
             is_authenticated: false,
@@ -616,9 +659,10 @@ export const getSponsor = async (request, env, config) => {
             scope,
         };
     }
+    let ownerIdString = String(owner_id);
     try {
         // Get Durable Object instance
-        const id = env.SPONSOR_DO.idFromName(owner_id);
+        const id = env.SPONSOR_DO.idFromName(ownerIdString);
         let stub = env.SPONSOR_DO.get(id);
         // Verify access token and get sponsor data
         const verifyResponse = await stub.fetch(`http://fake-host/verify?token=${encodeURIComponent(access_token)}`);
@@ -627,7 +671,7 @@ export const getSponsor = async (request, env, config) => {
             sponsorData = await verifyResponse.json();
         }
         else {
-            const initialized = await initializeUser(env, access_token, request.url, scope || undefined);
+            const initialized = await initializeUser(env, access_token, request.url);
             if (!initialized.userData ||
                 initialized.error ||
                 !initialized.sponsorData) {
@@ -639,9 +683,9 @@ export const getSponsor = async (request, env, config) => {
                 };
             }
             // this is the verified owner_id from the access_token from the API
-            if (initialized.owner_id !== owner_id) {
-                owner_id = initialized.owner_id;
-                const id = env.SPONSOR_DO.idFromName(owner_id);
+            if (String(initialized.owner_id) !== ownerIdString) {
+                ownerIdString = String(initialized.owner_id);
+                const id = env.SPONSOR_DO.idFromName(ownerIdString);
                 //owerwrite stub to prevent corrupt data
                 stub = env.SPONSOR_DO.get(id);
             }
@@ -694,35 +738,36 @@ export const getSponsor = async (request, env, config) => {
         return { is_authenticated: false, charged: false };
     }
 };
-export const getCookies = (request) => {
+/**
+ * Parses authorization details from the cookie, header, or query
+ */
+export const getAuthorization = (request) => {
     // Get owner_id and authorization from cookies
     const cookie = request.headers.get("Cookie");
     const rows = cookie?.split(";").map((x) => x.trim());
-    const ownerIdCookie = rows?.find((row) => row.startsWith("owner_id="));
-    const owner_id = ownerIdCookie
-        ? decodeURIComponent(ownerIdCookie.split("=")[1].trim())
-        : request.headers.get("x-owner-id");
-    const scopeCookie = rows?.find((row) => row.startsWith("github_oauth_scope="));
-    const scope = scopeCookie
-        ? decodeURIComponent(scopeCookie.split("=")[1].trim())
-        : request.headers.get("x-scope");
     const authCookie = rows?.find((row) => row.startsWith("authorization="));
-    const authorization = authCookie
-        ? decodeURIComponent(authCookie.split("=")[1].trim())
-        : request.headers.get("authorization");
-    const access_token = authorization
-        ? authorization.slice("Bearer ".length)
-        : new URL(request.url).searchParams.get("apiKey");
+    // query, cookie, or header
+    const authorization = new URL(request.url).searchParams.get("apiKey") ||
+        authCookie?.split("=Bearer%20")[1].trim() ||
+        request.headers.get("authorization")?.slice("Bearer ".length);
+    if (!authorization) {
+        return {};
+    }
+    const parse = parseCookieSafeToken(authorization);
+    if (!parse) {
+        return {};
+    }
+    const { access_token, scope, owner_id } = parse;
     return { scope, owner_id, access_token };
 };
 export const getUsage = async (request, env) => {
-    const { owner_id, access_token } = getCookies(request);
+    const { owner_id, access_token } = getAuthorization(request);
     if (!owner_id || !access_token) {
         return { error: "No access" };
     }
     try {
         // Get Durable Object instance
-        const id = env.SPONSOR_DO.idFromName(owner_id);
+        const id = env.SPONSOR_DO.idFromName(String(owner_id));
         const stub = env.SPONSOR_DO.get(id);
         // Verify access token and get sponsor data
         const verifyResponse = await stub.fetch(`http://fake-host/usage`);

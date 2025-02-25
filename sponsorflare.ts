@@ -138,7 +138,8 @@ type CookieValue = {
   owner_id: number;
   scope: string;
 };
-function createCookieSafeToken(data: CookieValue) {
+
+export function createCookieSafeToken(data: CookieValue) {
   // Base64Url encode
   const token = btoa(JSON.stringify(data))
     .replace(/=/g, "")
@@ -149,7 +150,9 @@ function createCookieSafeToken(data: CookieValue) {
   return encodeURIComponent(token);
 }
 
-function parseCookieSafeToken(cookieValue: string): CookieValue | undefined {
+export function parseCookieSafeToken(
+  cookieValue: string,
+): CookieValue | undefined {
   try {
     // Decode the URL encoding
     const token = decodeURIComponent(cookieValue);
@@ -171,7 +174,6 @@ const initializeUser = async (
   env: Env,
   access_token: string,
   source?: string,
-  scope?: string,
 ) => {
   // Fetch user data (keep existing code)
   const userResponse = await fetch("https://api.github.com/user", {
@@ -184,6 +186,9 @@ const initializeUser = async (
   if (!userResponse.ok) {
     return { error: await userResponse.text(), status: userResponse.status };
   }
+
+  const responseScope = userResponse.headers.get("X-OAuth-Scopes");
+
   const userData: {
     id: number;
     login: string;
@@ -241,7 +246,7 @@ const initializeUser = async (
       body: JSON.stringify({
         sponsor: sponsorData,
         access_token,
-        scope,
+        scope: responseScope,
         source,
       }),
     }),
@@ -255,7 +260,8 @@ const initializeUser = async (
     status: 200,
     userData,
     sponsorData,
-    owner_id: userData.id.toString(),
+    scope: responseScope,
+    owner_id: userData.id,
   };
 };
 
@@ -876,7 +882,7 @@ export const middleware = async (request: Request, env: Env) => {
     }
   }
 
-  if (url.pathname === "/login") {
+  if (request.method === "GET" && url.pathname === "/login") {
     const scope = url.searchParams.get("scope");
     if (env.SKIP_LOGIN === "true") {
       return new Response("Redirecting", {
@@ -922,6 +928,30 @@ export const middleware = async (request: Request, env: Env) => {
     return new Response("Redirecting", { status: 302, headers });
   }
 
+  if (request.method === "POST" && url.pathname === "/login") {
+    const github_access_token = url.searchParams.get("token");
+
+    if (!github_access_token) {
+      return new Response(
+        "Please, provide a github access token as ?token query parameter",
+        { status: 400 },
+      );
+    }
+
+    const result = await initializeUser(env, github_access_token, url.origin);
+
+    if (!result.sponsorData?.owner_id || !result.scope) {
+      return new Response(result.error, { status: result.status });
+    }
+
+    const token = createCookieSafeToken({
+      access_token: github_access_token,
+      owner_id: Number(result.sponsorData.owner_id),
+      scope: result.scope,
+    });
+    return new Response(token, { status: 200 });
+  }
+
   // GitHub OAuth callback route
   if (url.pathname === "/callback") {
     try {
@@ -937,7 +967,6 @@ export const middleware = async (request: Request, env: Env) => {
         env,
         access_token,
         redirectUriCookie,
-        scope,
       );
 
       if (initialized.error || !initialized.userData) {
@@ -1061,12 +1090,7 @@ export const getSponsor = async (
     if (verifyResponse.ok) {
       sponsorData = await verifyResponse.json();
     } else {
-      const initialized = await initializeUser(
-        env,
-        access_token,
-        request.url,
-        scope || undefined,
-      );
+      const initialized = await initializeUser(env, access_token, request.url);
 
       if (
         !initialized.userData ||
@@ -1082,8 +1106,8 @@ export const getSponsor = async (
       }
 
       // this is the verified owner_id from the access_token from the API
-      if (initialized.owner_id !== ownerIdString) {
-        ownerIdString = initialized.owner_id;
+      if (String(initialized.owner_id) !== ownerIdString) {
+        ownerIdString = String(initialized.owner_id);
         const id = env.SPONSOR_DO.idFromName(ownerIdString);
         //owerwrite stub to prevent corrupt data
         stub = env.SPONSOR_DO.get(id);

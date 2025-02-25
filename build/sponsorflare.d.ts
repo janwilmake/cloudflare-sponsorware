@@ -63,6 +63,13 @@ interface ViewerData {
         id?: string;
     }[];
 }
+type CookieValue = {
+    access_token: string;
+    owner_id: number;
+    scope: string;
+};
+export declare function createCookieSafeToken(data: CookieValue): string;
+export declare function parseCookieSafeToken(cookieValue: string): CookieValue | undefined;
 export { stats } from "./stats";
 export declare class SponsorDO {
     private state;
@@ -86,10 +93,17 @@ export declare const getSponsor: (request: Request, env: Env, config?: {
     owner_id?: string | null;
     scope?: string | null;
 } & Partial<Sponsor>>;
-export declare const getCookies: (request: Request) => {
-    scope: string | null;
-    owner_id: string | null;
-    access_token: string | null;
+/**
+ * Parses authorization details from the cookie, header, or query
+ */
+export declare const getAuthorization: (request: Request) => {
+    scope?: undefined;
+    owner_id?: undefined;
+    access_token?: undefined;
+} | {
+    scope: string;
+    owner_id: number;
+    access_token: string;
 };
 export declare const getUsage: (request: Request, env: Env) => Promise<{
     usage: Usage[];

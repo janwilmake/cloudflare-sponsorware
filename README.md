@@ -183,10 +183,16 @@ Because we're not using a global database but a separate database per user, the 
 
 ### Revamp
 
-- Central db sponsorflare
-- Allow for single access-token Authorization Bearer token (encoded other 3)
-- Store transactions in SQLite for easier retrieval
+- ❌ Additional mapping from a global KV-stored sponsorflare-access-token to a user_id + access_token + scope. This way it remains fast as KV is replicated globally, while it also makes it easier to authenticate, since we don't need to set 3 different cookies/headers.
+- ✅ Allow for single access-token Authorization Bearer token (encoded other 3) and expose the parsing/creation of this along with an improved `getAuthorization` function.
+- Create a programmatic way to login by passing just a github access_token and returning the sponsorflare access_token after user_id+scope lookup. Can be `/login?token=XXX => string`
+- `/usage` is now slow. Store transactions in SQL rather than KV (more efficient to query)
 - Update sponsorflare version everywhere
+
+### Central Shadow DB
+
+- Currently, fetching all users requires 1 subrequest per user, which can be problematic. We need a master DO that keeps track of user info. Let's try a master DO that simply we write to each time we execute a query, but in waitUntil, such that it's a direct clone of all stuff together, but it doesn't slow stuff down.
+- If that's too slow, another way is with alarms. Each time a DO is activated, it can set an alarm (if not already) to back up itself to the master DO, within an hour.
 
 ### Admin endpoint: Get all user data
 
@@ -198,8 +204,4 @@ Because we're not using a global database but a separate database per user, the 
 ### Ideas (Backlog):
 
 - Sponsorflare Dashboard should be prettier. Ideally, the bar width is adjusted to the screen size and amount of bars.
-- Additional mapping from a global KV-stored sponsorflare-access-token to a user_id + access_token + scope. This way it remains fast as KV is replicated globally, while it also makes it easier to authenticate, since we don't need to set 3 different cookies/headers.
-- `/usage` is now slow. Store transactions in SQL rather than KV (more efficient to query)
-- Idea: Currently, fetching all users requires 1 subrequest per user, which can be problematic. We need a master DO that keeps track of user info. Let's try a master DO that simply we write to each time we execute a query, but in waitUntil, such that it's a direct clone of all stuff together, but it doesn't slow stuff down.
-- If that's too slow, another way is with alarms. Each time a DO is activated, it can set an alarm (if not already) to back up itself to the master DO, within an hour.
 - Builtin Unauthenticated Ratelimiting per IP; useful, but this is completely separate so can as well be a completely separate thing.

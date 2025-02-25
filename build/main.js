@@ -155,14 +155,14 @@ export default {
                           the monetized tools include:
                           <a
                             class="text-orange-300 hover:text-orange-500"
-                            href="https://dashboard.uithub.com"
-                            >Uithub Dashboard</a
+                            href="https://dashboard.forgithub.com"
+                            >Dashboard for GitHub</a
                           >
                           |
                           <a
                             class="text-orange-300 hover:text-orange-500"
-                            href="https://chat.uithub.com"
-                            >Uithub Chat</a
+                            href="https://chat.forgithub.com"
+                            >Chat for GitHub</a
                           >
                         </p>
                         <p class="text-slate-500 mt-4">
