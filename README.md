@@ -185,9 +185,9 @@ Because we're not using a global database but a separate database per user, the 
 
 - ❌ Additional mapping from a global KV-stored sponsorflare-access-token to a user_id + access_token + scope. This way it remains fast as KV is replicated globally, while it also makes it easier to authenticate, since we don't need to set 3 different cookies/headers.
 - ✅ Allow for single access-token Authorization Bearer token (encoded other 3) and expose the parsing/creation of this along with an improved `getAuthorization` function.
-- Create a programmatic way to login by passing just a github access_token and returning the sponsorflare access_token after user_id+scope lookup. Can be `/login?token=XXX => string`
+- ✅ Create a programmatic way to login by passing just a github access_token and returning the sponsorflare access_token after user_id+scope lookup. Can be `/login?token=XXX => string`
+- ✅ Update sponsorflare version everywhere
 - `/usage` is now slow. Store transactions in SQL rather than KV (more efficient to query)
-- Update sponsorflare version everywhere
 
 ### Central Shadow DB
 
