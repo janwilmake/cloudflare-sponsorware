@@ -189,10 +189,23 @@ Because we're not using a global database but a separate database per user, the 
 - ✅ Update sponsorflare version everywhere
 - `/usage` is now slow. Store transactions in SQL rather than KV (more efficient to query)
 
+### DO Observability
+
+- ✅ Figure out how to make Sponsorflare an SQLite-enabled DO without loosing data https://developers.cloudflare.com/durable-objects/api/sql-storage/ --> **cannot be done. need export then import**
+- export sponsorflare DO list, then make a new one and import into SQLite.
+- Add https://gist.github.com/Brayden/dfbf51e889323484b10c7f4a7e343eb1 to sponsorflare DO. For this, sponsorflare first needs to become a SQLite-enabled DO.
+- Also add it to sponsorflare middleware such that I can visit the API over `/sqlite/:name`
+- Also create a protected endpoint that'd exposes all database names as `{name,basePath}[]`
+- Deploy for Sponsorflare itself
+- Try adding it as SQL Server in https://app.outerbase.com
+
+Goal: migrate sponsorflare to sqlite and see all data in.
+
 ### Central Shadow DB
 
 - Currently, fetching all users requires 1 subrequest per user, which can be problematic. We need a master DO that keeps track of user info. Let's try a master DO that simply we write to each time we execute a query, but in waitUntil, such that it's a direct clone of all stuff together, but it doesn't slow stuff down.
 - If that's too slow, another way is with alarms. Each time a DO is activated, it can set an alarm (if not already) to back up itself to the master DO, within an hour.
+- The master DB is great to explore over outerbases UI.
 
 ### Admin endpoint: Get all user data
 
@@ -200,6 +213,16 @@ Because we're not using a global database but a separate database per user, the 
 - `/users.json` admin endpoint: returns all users. Cache JSON for 1 day stale-while-revalidate (so its fast and efficient)
 - Create `admin.html` that queries `/users.json`
 - Create function that, for all users, updates the user data for a sponsor to the most recent values.
+
+### Solve logging.
+
+- `this.log` function that logs into a SQL table so I can track this via the dashboard. I can debug any DO now.
+- Solve `forgithub.activity` in the same way by connecting SQL_dashboard and using `this.log` instead of console.log only.
+
+### Sponsorflare using X and skyfire
+
+- Same but with X login and the alarm
+- Already had flarefare but now reuse this and make the skyfire integration nicer. use the stripe button, replacing github sponsors with skyfire+stripe. It's a better flow for users coming from X if I don't need the code per se.
 
 ### Ideas (Backlog):
 
