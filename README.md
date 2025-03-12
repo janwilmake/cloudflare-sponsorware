@@ -25,12 +25,12 @@ GITHUB_REDIRECT_URI = "https://yourworkerdomain.com/callback"
 LOGIN_REDIRECT_URI = "/"
 
 [[durable_objects.bindings]]
-name = "SPONSORFLARE_DO"
-class_name = "SponsorflareDO"
+name = "SPONSOR_DO"
+class_name = "SponsorDO"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["SponsorflareDO"]
+new_classes = ["SponsorDO"]
 ```
 
 `main.ts`:

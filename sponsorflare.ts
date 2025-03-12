@@ -18,7 +18,7 @@ export interface Env {
   GITHUB_WEBHOOK_SECRET: string;
   GITHUB_PAT: string;
   LOGIN_REDIRECT_URI: string;
-  SPONSORFLARE_DO: DurableObjectNamespace;
+  SPONSOR_DO: DurableObjectNamespace;
   /** If 'true', will skip login and use "GITHUB_PAT" for access */
   SKIP_LOGIN: string;
   COOKIE_DOMAIN_SHARING: string;
@@ -238,8 +238,8 @@ const initializeUser = async (
   };
 
   // Get Durable Object instance
-  const id = env.SPONSORFLARE_DO.idFromName(userData.id.toString());
-  const stub = env.SPONSORFLARE_DO.get(id);
+  const id = env.SPONSOR_DO.idFromName(userData.id.toString());
+  const stub = env.SPONSOR_DO.get(id);
 
   // Initialize the Durable Object with sponsor data and access token
   const initResponse = await stub.fetch(
@@ -267,7 +267,7 @@ const initializeUser = async (
   };
 };
 
-export class SponsorflareDO {
+export class SponsorDO {
   private state: DurableObjectState;
   private storage: DurableObjectStorage;
   private sql: SqlStorage;
@@ -853,8 +853,8 @@ export const setCredit = async (
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const id = env.SPONSORFLARE_DO.idFromName(userId);
-  const stub = env.SPONSORFLARE_DO.get(id);
+  const id = env.SPONSOR_DO.idFromName(userId);
+  const stub = env.SPONSOR_DO.get(id);
 
   const response = await stub.fetch(`http://fake-host/set-credit?clv=${clv}`);
 
@@ -1174,8 +1174,8 @@ export const middleware = async (request: Request, env: Env) => {
       for (const sponsor of sponsorshipData.sponsors) {
         if (!sponsor.id) continue;
 
-        const id = env.SPONSORFLARE_DO.idFromName(sponsor.id);
-        const stub = env.SPONSORFLARE_DO.get(id);
+        const id = env.SPONSOR_DO.idFromName(sponsor.id);
+        const stub = env.SPONSOR_DO.get(id);
 
         // Prepare sponsor data
         const sponsorData: Sponsor = {
@@ -1413,8 +1413,8 @@ export const getSponsor = async (
 
   try {
     // Get Durable Object instance
-    const id = env.SPONSORFLARE_DO.idFromName(ownerIdString);
-    let stub = env.SPONSORFLARE_DO.get(id);
+    const id = env.SPONSOR_DO.idFromName(ownerIdString);
+    let stub = env.SPONSOR_DO.get(id);
 
     // Verify access token and get sponsor data
     const verifyResponse = await stub.fetch(
@@ -1443,9 +1443,9 @@ export const getSponsor = async (
       // this is the verified owner_id from the access_token from the API
       if (String(initialized.owner_id) !== ownerIdString) {
         ownerIdString = String(initialized.owner_id);
-        const id = env.SPONSORFLARE_DO.idFromName(ownerIdString);
+        const id = env.SPONSOR_DO.idFromName(ownerIdString);
         //owerwrite stub to prevent corrupt data
-        stub = env.SPONSORFLARE_DO.get(id);
+        stub = env.SPONSOR_DO.get(id);
       }
 
       sponsorData = initialized.sponsorData;
@@ -1546,8 +1546,8 @@ export const getUsage = async (request: Request, env: Env) => {
 
   try {
     // Get Durable Object instance
-    const id = env.SPONSORFLARE_DO.idFromName(String(owner_id));
-    const stub = env.SPONSORFLARE_DO.get(id);
+    const id = env.SPONSOR_DO.idFromName(String(owner_id));
+    const stub = env.SPONSOR_DO.get(id);
 
     // Verify access token and get sponsor data
     const verifyResponse = await stub.fetch(`http://fake-host/usage`);

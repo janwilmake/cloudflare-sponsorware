@@ -1,4 +1,4 @@
-name = "sponsorflare"
+name = "sponsorflare2"
 main = "main.ts"
 compatibility_date = "2025-01-25"
 assets.directory = "./"
@@ -15,14 +15,9 @@ COOKIE_DOMAIN_SHARING = "true"
 ADMIN_OWNER_LOGIN = "janwilmake"
 
 [[durable_objects.bindings]]
-name = "SPONSORFLARE_DO"
-class_name = "SponsorflareDO"
+name = "SPONSOR_DO"
+class_name = "SponsorDO"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["SponsorDO"]
-
-[[migrations]]
-tag = "v2"
-deleted_classes = ["SponsorDO"]
-new_sqlite_classes = ["SponsorflareDO"]
+new_sqlite_classes = ["SponsorDO"]
