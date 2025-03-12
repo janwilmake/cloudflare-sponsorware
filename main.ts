@@ -6,8 +6,10 @@ import {
   middleware,
   Usage,
   stats,
+  SponsorDO,
 } from "./sponsorflare";
-export { SponsorflareDO } from "./sponsorflare";
+
+export { SponsorDO };
 
 export interface Env extends SponsorflareEnv {
   ADMIN_OWNER_LOGIN: string;
