@@ -2,3 +2,4 @@ node_modules
 .dev.vars
 .wrangler
 .DS_store
+old-data.json

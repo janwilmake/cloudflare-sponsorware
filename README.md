@@ -25,12 +25,12 @@ GITHUB_REDIRECT_URI = "https://yourworkerdomain.com/callback"
 LOGIN_REDIRECT_URI = "/"
 
 [[durable_objects.bindings]]
-name = "SPONSOR_DO"
-class_name = "SponsorDO"
+name = "SPONSORFLARE_DO"
+class_name = "SponsorflareDO"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["SponsorDO"]
+new_classes = ["SponsorflareDO"]
 ```
 
 `main.ts`:
@@ -51,8 +51,8 @@ export default {
     });
 
     if (!charged) {
-      return new Response("Payment required. Redirecting...", {
-        status: 307,
+      return new Response("Payment required.", {
+        status: 402,
         headers: { Location: "https://github.com/sponsors/janwilmake" },
       });
     }
@@ -181,25 +181,39 @@ Because we're not using a global database but a separate database per user, the 
 - ✅ Created openapi to understand the endpoints in the middleware
 - ✅ Sponsorflare fix oauth. Now errors.
 
-### Revamp
+### Revamp 2025-02-14
 
 - ❌ Additional mapping from a global KV-stored sponsorflare-access-token to a user_id + access_token + scope. This way it remains fast as KV is replicated globally, while it also makes it easier to authenticate, since we don't need to set 3 different cookies/headers.
 - ✅ Allow for single access-token Authorization Bearer token (encoded other 3) and expose the parsing/creation of this along with an improved `getAuthorization` function.
 - ✅ Create a programmatic way to login by passing just a github access_token and returning the sponsorflare access_token after user_id+scope lookup. Can be `/login?token=XXX => string`
 - ✅ Update sponsorflare version everywhere
-- `/usage` is now slow. Store transactions in SQL rather than KV (more efficient to query)
 
-### DO Observability
+### DO Observability (2025-03-11)
 
 - ✅ Figure out how to make Sponsorflare an SQLite-enabled DO without loosing data https://developers.cloudflare.com/durable-objects/api/sql-storage/ --> **cannot be done. need export then import**
-- export sponsorflare DO list, then make a new one and import into SQLite.
-- Add https://gist.github.com/Brayden/dfbf51e889323484b10c7f4a7e343eb1 to sponsorflare DO. For this, sponsorflare first needs to become a SQLite-enabled DO.
-- Also add it to sponsorflare middleware such that I can visit the API over `/sqlite/:name`
-- Also create a protected endpoint that'd exposes all database names as `{name,basePath}[]`
-- Deploy for Sponsorflare itself
-- Try adding it as SQL Server in https://app.outerbase.com
+- ✅ `/usage` is now slow. Store transactions in SQL rather than KV (more efficient to query)
+- ✅ export sponsorflare DO list by updating `/stats` and making it available in sponsorflare.
+- ✅ Make a new DO that uses SQLite
+- ✅ Convert stuff to use SQLite
+- ✅ Deploy/publish this new version with README on how to migrate.
 
-Goal: migrate sponsorflare to sqlite and see all data in.
+### Finish Observability
+
+- Add https://gist.github.com/Brayden/dfbf51e889323484b10c7f4a7e343eb1 to Sponsorflare DO. For this, sponsorflare first needs to become a SQLite-enabled DO (✅)
+- Also add it to Sponsorflare middleware such that I can visit the API over `/sqlite/:name`
+- Also create a protected endpoint `/stats` as part of the middleware and ensure it also exposes the basePath for each db as part of the array..
+- Deploy for Sponsorflare itself
+- Try adding it as SQL Server in https://app.outerbase.com (Starbase)
+
+🎉 Goal: migrate sponsorflare to sqlite and see all data in it. Also have a simple DO middleware + sqlite middleware that can be added to any DO.
+
+### Solve logging.
+
+- Also track the "access_token" last use.
+- `this.log` function that logs into a SQL table so I can track this via the dashboard. I can debug any DO now.
+- Solve `forgithub.activity` in the same way by connecting SQL_dashboard and using `this.log` instead of console.log only.
+
+🎉 Goal: have logging in forgithub activity so I know what's happening. try solve issue for merge!!!!
 
 ### Central Shadow DB
 
@@ -207,22 +221,12 @@ Goal: migrate sponsorflare to sqlite and see all data in.
 - If that's too slow, another way is with alarms. Each time a DO is activated, it can set an alarm (if not already) to back up itself to the master DO, within an hour.
 - The master DB is great to explore over outerbases UI.
 
-### Admin endpoint: Get all user data
-
-- Also track the "access_token" last use.
-- `/users.json` admin endpoint: returns all users. Cache JSON for 1 day stale-while-revalidate (so its fast and efficient)
-- Create `admin.html` that queries `/users.json`
-- Create function that, for all users, updates the user data for a sponsor to the most recent values.
-
-### Solve logging.
-
-- `this.log` function that logs into a SQL table so I can track this via the dashboard. I can debug any DO now.
-- Solve `forgithub.activity` in the same way by connecting SQL_dashboard and using `this.log` instead of console.log only.
-
 ### Sponsorflare using X and skyfire
 
 - Same but with X login and the alarm
 - Already had flarefare but now reuse this and make the skyfire integration nicer. use the stripe button, replacing github sponsors with skyfire+stripe. It's a better flow for users coming from X if I don't need the code per se.
+- xymake built from new sponsorflare base... but with wrapped DO with alarm and augmented data.
+- merge the sponsorflare and evaloncloud into 1 product. probably best to call it evaloncloud and put the demo at demo.evaloncloud.com
 
 ### Ideas (Backlog):
 

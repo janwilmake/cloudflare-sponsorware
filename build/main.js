@@ -1,12 +1,19 @@
-import { getSponsor, getUsage, html, middleware, } from "./sponsorflare";
-export { SponsorDO } from "./sponsorflare";
+import { getSponsor, getUsage, html, middleware, stats, } from "./sponsorflare";
+export { SponsorflareDO } from "./sponsorflare";
 export default {
     fetch: async (request, env) => {
         // Handle sponsorflare auth
         const sponsorflare = await middleware(request, env);
         if (sponsorflare)
             return sponsorflare;
-        const { charged, is_authenticated, is_sponsor, clv, spent, owner_login, avatar_url, } = await getSponsor(request, env, { charge: 1, allowNegativeClv: true });
+        const { is_authenticated, is_sponsor, clv, spent, owner_login, avatar_url, } = await getSponsor(request, env, { charge: 1, allowNegativeClv: true });
+        const url = new URL(request.url);
+        if (url.pathname === "/stats" && owner_login === env.ADMIN_OWNER_LOGIN) {
+            const result = await stats(env, env.CLOUDFLARE_ACCOUNT_ID, env.CLOUDFLARE_NAMESPACE_ID, env.CLOUDFLARE_API_KEY);
+            return new Response(JSON.stringify(result, undefined, 2), {
+                headers: { "content-type": "application/json" },
+            });
+        }
         const { usage, error } = await getUsage(request, env);
         // Process usage data for the chart
         const processedData = usage

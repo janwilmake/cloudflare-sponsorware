@@ -7,7 +7,7 @@ import {
   Usage,
   stats,
 } from "./sponsorflare";
-export { SponsorDO } from "./sponsorflare";
+export { SponsorflareDO } from "./sponsorflare";
 
 export interface Env extends SponsorflareEnv {
   ADMIN_OWNER_LOGIN: string;
@@ -34,6 +34,7 @@ export default {
     const url = new URL(request.url);
     if (url.pathname === "/stats" && owner_login === env.ADMIN_OWNER_LOGIN) {
       const result = await stats(
+        env,
         env.CLOUDFLARE_ACCOUNT_ID,
         env.CLOUDFLARE_NAMESPACE_ID,
         env.CLOUDFLARE_API_KEY,

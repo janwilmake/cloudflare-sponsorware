@@ -1,3 +1,5 @@
+export { stats } from "./stats";
+
 declare global {
   var env: Env;
 }
@@ -16,7 +18,7 @@ export interface Env {
   GITHUB_WEBHOOK_SECRET: string;
   GITHUB_PAT: string;
   LOGIN_REDIRECT_URI: string;
-  SPONSOR_DO: DurableObjectNamespace;
+  SPONSORFLARE_DO: DurableObjectNamespace;
   /** If 'true', will skip login and use "GITHUB_PAT" for access */
   SKIP_LOGIN: string;
   COOKIE_DOMAIN_SHARING: string;
@@ -236,8 +238,8 @@ const initializeUser = async (
   };
 
   // Get Durable Object instance
-  const id = env.SPONSOR_DO.idFromName(userData.id.toString());
-  const stub = env.SPONSOR_DO.get(id);
+  const id = env.SPONSORFLARE_DO.idFromName(userData.id.toString());
+  const stub = env.SPONSORFLARE_DO.get(id);
 
   // Initialize the Durable Object with sponsor data and access token
   const initResponse = await stub.fetch(
@@ -265,14 +267,65 @@ const initializeUser = async (
   };
 };
 
-export { stats } from "./stats";
-export class SponsorDO {
+export class SponsorflareDO {
   private state: DurableObjectState;
   private storage: DurableObjectStorage;
+  private sql: SqlStorage;
 
-  constructor(state: DurableObjectState) {
+  constructor(state: DurableObjectState, env: Env) {
     this.state = state;
     this.storage = state.storage;
+    this.sql = state.storage.sql;
+
+    // Initialize database schema if it doesn't exist
+    this.initializeSchema();
+  }
+
+  private initializeSchema() {
+    // Create owners table (previously "sponsor" in KV)
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS owners (
+        owner_id TEXT PRIMARY KEY,
+        owner_login TEXT NOT NULL,
+        avatar_url TEXT,
+        blog TEXT,
+        bio TEXT,
+        email TEXT,
+        twitter_username TEXT,
+        is_authenticated INTEGER DEFAULT 0,
+        is_sponsor INTEGER DEFAULT 0,
+        clv INTEGER DEFAULT 0,
+        spent INTEGER DEFAULT 0,
+        balance INTEGER DEFAULT 0,
+        source TEXT,
+        created_at INTEGER,
+        updated_at INTEGER
+      );
+    `);
+
+    // Create tokens table
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS tokens (
+        access_token TEXT PRIMARY KEY,
+        owner_id TEXT NOT NULL,
+        scope TEXT,
+        source TEXT,
+        created_at INTEGER,
+        FOREIGN KEY (owner_id) REFERENCES owners(owner_id)
+      );
+    `);
+
+    // Create charges table
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS charges (
+        id TEXT PRIMARY KEY,
+        owner_id TEXT NOT NULL,
+        amount INTEGER NOT NULL,
+        timestamp INTEGER NOT NULL,
+        source TEXT,
+        FOREIGN KEY (owner_id) REFERENCES owners(owner_id)
+      );
+    `);
   }
 
   async fetch(request: Request) {
@@ -281,223 +334,505 @@ export class SponsorDO {
     // Handle different operations based on the path
     switch (url.pathname) {
       case "/initialize":
-        const initData: {
-          sponsor: Sponsor;
-          access_token: string;
-          scope: string;
-          source: string;
-        } = await request.json();
+        return await this.handleInitialize(request);
 
-        const already: Sponsor | undefined = await this.storage.get("sponsor", {
-          noCache: true,
-        });
-
-        await this.storage.put(
-          "sponsor",
-          {
-            ...(already || { createdAt: Date.now() }),
-            ...initData.sponsor,
-          },
-          { noCache: true, allowUnconfirmed: false },
-        );
-
-        if (initData.access_token) {
-          await this.storage.put(initData.access_token, {
-            scope: initData.scope,
-            createdAt: Date.now(),
-            source: initData.source,
-          });
-        }
-
-        return new Response("Initialized", { status: 200 });
-
-      case "/user": {
-        const sponsor: Sponsor | undefined = await this.storage.get("sponsor");
-        if (!sponsor) {
-          return new Response("Not found", { status: 404 });
-        }
-        return new Response(JSON.stringify(sponsor), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
+      case "/user":
+        return await this.handleUser();
 
       case "/verify":
-        // Endpoint used to check if a user uses a token
-        const access_token = url.searchParams.get("token");
-
-        const tokenData:
-          | { scope: string; source: string; createdAt: number }
-          | undefined = await this.storage.get(access_token!);
-
-        if (!tokenData) {
-          return new Response("Invalid token", { status: 401 });
-        }
-
-        const sponsor: Sponsor | undefined = await this.storage.get("sponsor");
-
-        if (sponsor) {
-          await this.storage.put("sponsor", {
-            ...sponsor,
-            updatedAt: Date.now(),
-          } satisfies Sponsor);
-        }
-
-        return new Response(JSON.stringify(sponsor), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
+        return await this.handleVerify(url);
 
       case "/usage":
-        const charges = await this.storage.list({
-          prefix: "charge.",
-          allowConcurrency: true,
-        });
+        return await this.handleUsage();
 
-        const entries = Array.from(charges.values()) as {
-          amount: number;
-          timestamp: number;
-          source: string;
-        }[];
+      case "/set-credit":
+        return await this.handleSetCredit(url);
 
-        // Group by YYYY-MM-DD and hostname
-        const grouped = entries.reduce(
-          (acc, entry) => {
-            // Convert timestamp to YYYY-MM-DD
-            const date = new Date(entry.timestamp).toISOString().split("T")[0];
+      case "/charge":
+        return await this.handleCharge(url);
 
-            // Extract hostname from URL
-            const url = entry.source ? new URL(entry.source) : undefined;
-            const hostname = url?.hostname || null;
-
-            // Create unique key for date + hostname
-            const key = `${date}|${hostname || "null"}`;
-
-            if (!acc[key]) {
-              acc[key] = {
-                date,
-                hostname,
-                totalAmount: 0,
-                count: 0,
-              };
-            }
-
-            acc[key].totalAmount += entry.amount;
-            acc[key].count += 1;
-
-            return acc;
-          },
-          {} as Record<
-            string,
-            {
-              date: string;
-              hostname: string | null;
-              totalAmount: number;
-              count: number;
-            }
-          >,
-        );
-
-        // Convert to array and sort by date desc, then hostname
-        const result = Object.values(grouped)
-          .sort((a, b) => {
-            const dateCompare = b.date.localeCompare(a.date);
-            if (dateCompare !== 0) return dateCompare;
-            return (a.hostname || "null").localeCompare(b.hostname || "null");
-          })
-          .map((group) => ({
-            ...group,
-            totalAmount: group.totalAmount / 100, // Convert cents to dollars
-          }))
-          .sort((a, b) => (a.date < b.date ? -1 : 1));
-
-        return new Response(JSON.stringify(result));
-
-      case "/set-credit": {
-        const newClv = Number(url.searchParams.get("clv"));
-
-        if (isNaN(newClv)) {
-          return new Response("Invalid userId or clv", { status: 400 });
-        }
-
-        const sponsor_data: Sponsor | undefined = await this.storage.get(
-          "sponsor",
-        );
-
-        if (!sponsor_data) {
-          return new Response("Sponsor not found", { status: 404 });
-        }
-
-        const updated = {
-          ...sponsor_data,
-          clv: newClv,
-        };
-
-        await this.storage.put("sponsor", updated);
-
-        return new Response(JSON.stringify(updated));
-      }
-
-      case "/charge": {
-        const chargeAmount = Number(url.searchParams.get("amount"));
-        const source = url.searchParams.get("source");
-        const idempotencyKey = url.searchParams.get("idempotency_key");
-
-        if (!idempotencyKey) {
-          return new Response("Idempotency key required", { status: 400 });
-        }
-
-        const chargeKey = `charge.${idempotencyKey}`;
-        const existingCharge = await this.storage.get(chargeKey);
-
-        if (existingCharge) {
-          return new Response(
-            JSON.stringify({
-              message: "Charge already processed",
-              charge: existingCharge,
-            }),
-            {
-              status: 200,
-              headers: { "Content-Type": "application/json" },
-            },
-          );
-        }
-
-        const sponsor_data: Sponsor | undefined = await this.storage.get(
-          "sponsor",
-        );
-
-        if (!sponsor_data) {
-          return new Response("Sponsor not found", { status: 404 });
-        }
-
-        const updated = {
-          ...sponsor_data,
-          spent: (sponsor_data.spent || 0) + chargeAmount,
-        };
-
-        await this.storage.put("sponsor", updated);
-
-        // Record the charge with timestamp
-        await this.storage.put(chargeKey, {
-          amount: chargeAmount,
-          timestamp: Date.now(),
-          source,
-        });
-
-        return new Response(JSON.stringify(updated), {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
-            "Cache-Control": "no-store, no-cache, must-revalidate",
-            Pragma: "no-cache",
-            Expires: "0",
-          },
-        });
-      }
       default:
         return new Response("Not found", { status: 404 });
     }
+  }
+
+  async handleInitialize(request: Request) {
+    const initData: {
+      sponsor: Sponsor;
+      access_token: string;
+      scope: string;
+      source: string;
+    } = await request.json();
+
+    const sponsor = initData.sponsor;
+
+    // Check if sponsor already exists
+    const existingOwner = this.sql
+      .exec("SELECT * FROM owners WHERE owner_id = ?", sponsor.owner_id)
+      .toArray();
+
+    if (existingOwner.length > 0) {
+      // Update existing owner
+      this.sql.exec(
+        `
+        UPDATE owners SET
+          owner_login = ?,
+          avatar_url = ?,
+          blog = ?,
+          bio = ?,
+          email = ?,
+          twitter_username = ?,
+          is_authenticated = ?,
+          is_sponsor = ?,
+          clv = COALESCE(?, clv),
+          spent = COALESCE(?, spent),
+          balance = COALESCE(?, balance),
+          source = COALESCE(?, source),
+          updated_at = ?
+        WHERE owner_id = ?
+      `,
+        sponsor.owner_login,
+        sponsor.avatar_url || null,
+        sponsor.blog || null,
+        sponsor.bio || null,
+        sponsor.email || null,
+        sponsor.twitter_username || null,
+        sponsor.is_authenticated ? 1 : 0,
+        sponsor.is_sponsor ? 1 : 0,
+        sponsor.clv || null,
+        sponsor.spent || null,
+        sponsor.balance || null,
+        sponsor.source || null,
+        Date.now(),
+        sponsor.owner_id,
+      );
+    } else {
+      // Insert new owner
+      this.sql.exec(
+        `
+        INSERT INTO owners (
+          owner_id, owner_login, avatar_url, blog, bio, email, twitter_username,
+          is_authenticated, is_sponsor, clv, spent, balance, source, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+        sponsor.owner_id,
+        sponsor.owner_login,
+        sponsor.avatar_url || null,
+        sponsor.blog || null,
+        sponsor.bio || null,
+        sponsor.email || null,
+        sponsor.twitter_username || null,
+        sponsor.is_authenticated ? 1 : 0,
+        sponsor.is_sponsor ? 1 : 0,
+        sponsor.clv || 0,
+        sponsor.spent || 0,
+        sponsor.balance || 0,
+        sponsor.source || null,
+        Date.now(),
+        Date.now(),
+      );
+    }
+
+    // Store access token if provided
+    if (initData.access_token) {
+      this.sql.exec(
+        `
+        INSERT OR REPLACE INTO tokens (
+          access_token, owner_id, scope, source, created_at
+        ) VALUES (?, ?, ?, ?, ?)
+      `,
+        initData.access_token,
+        sponsor.owner_id,
+        initData.scope,
+        initData.source,
+        Date.now(),
+      );
+    }
+
+    return new Response("Initialized", { status: 200 });
+  }
+
+  async handleUser() {
+    // Only return the first sponsor found (there should only be one per DO)
+    const result = this.sql
+      .exec(
+        `
+      SELECT
+        owner_id,
+        owner_login,
+        avatar_url,
+        blog,
+        bio,
+        email,
+        twitter_username,
+        is_authenticated,
+        is_sponsor,
+        clv,
+        spent,
+        balance,
+        source,
+        created_at AS createdAt,
+        updated_at AS updatedAt
+      FROM owners
+      LIMIT 1
+    `,
+      )
+      .toArray();
+
+    if (result.length === 0) {
+      return new Response("Not found", { status: 404 });
+    }
+
+    // Convert SQLite boolean integers to JavaScript booleans
+    const sponsor = {
+      ...result[0],
+      is_authenticated: result[0].is_authenticated === 1,
+      is_sponsor: result[0].is_sponsor === 1,
+    };
+
+    return new Response(JSON.stringify(sponsor), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  async handleVerify(url: URL) {
+    const access_token = url.searchParams.get("token");
+
+    if (!access_token) {
+      return new Response("Token required", { status: 400 });
+    }
+
+    // Find token data
+    const tokenData = this.sql
+      .exec(
+        `
+      SELECT t.scope, t.source, t.created_at, t.owner_id
+      FROM tokens t
+      WHERE t.access_token = ?
+    `,
+        access_token,
+      )
+      .toArray();
+
+    if (tokenData.length === 0) {
+      return new Response("Invalid token", { status: 401 });
+    }
+
+    const owner_id = tokenData[0].owner_id;
+
+    // Find the sponsor data
+    const sponsorData = this.sql
+      .exec(
+        `
+      SELECT
+        owner_id,
+        owner_login,
+        avatar_url,
+        blog,
+        bio,
+        email,
+        twitter_username,
+        is_authenticated,
+        is_sponsor,
+        clv,
+        spent,
+        balance,
+        source,
+        created_at AS createdAt,
+        updated_at AS updatedAt
+      FROM owners
+      WHERE owner_id = ?
+    `,
+        owner_id,
+      )
+      .toArray();
+
+    if (sponsorData.length === 0) {
+      return new Response("Sponsor not found", { status: 404 });
+    }
+
+    // Update the sponsor's updatedAt
+    this.sql.exec(
+      `
+      UPDATE owners
+      SET updated_at = ?
+      WHERE owner_id = ?
+    `,
+      Date.now(),
+      owner_id,
+    );
+
+    // Convert SQLite boolean integers to JavaScript booleans
+    const sponsor = {
+      ...sponsorData[0],
+      is_authenticated: sponsorData[0].is_authenticated === 1,
+      is_sponsor: sponsorData[0].is_sponsor === 1,
+    };
+
+    return new Response(JSON.stringify(sponsor), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  async handleUsage() {
+    // Get all charges
+    const charges = this.sql
+      .exec(
+        `
+      SELECT c.amount, c.timestamp, c.source
+      FROM charges c
+      JOIN owners o ON c.owner_id = o.owner_id
+    `,
+      )
+      .toArray() as { timestamp: string; source: string; amount: number }[];
+
+    // Group by YYYY-MM-DD and hostname
+    const grouped = charges.reduce(
+      (acc, entry) => {
+        // Convert timestamp to YYYY-MM-DD
+        const date = new Date(entry.timestamp).toISOString().split("T")[0];
+
+        // Extract hostname from URL
+        const url = entry.source ? new URL(entry.source) : undefined;
+        const hostname = url?.hostname || null;
+
+        // Create unique key for date + hostname
+        const key = `${date}|${hostname || "null"}`;
+
+        if (!acc[key]) {
+          acc[key] = {
+            date,
+            hostname,
+            totalAmount: 0,
+            count: 0,
+          };
+        }
+
+        acc[key].totalAmount += entry.amount;
+        acc[key].count += 1;
+
+        return acc;
+      },
+      {} as Record<
+        string,
+        {
+          date: string;
+          hostname: string | null;
+          totalAmount: number;
+          count: number;
+        }
+      >,
+    );
+
+    // Convert to array and sort by date desc, then hostname
+    const result = Object.values(grouped)
+      .sort((a, b) => {
+        const dateCompare = b.date.localeCompare(a.date);
+        if (dateCompare !== 0) return dateCompare;
+        return (a.hostname || "null").localeCompare(b.hostname || "null");
+      })
+      .map((group) => ({
+        ...group,
+        totalAmount: group.totalAmount / 100, // Convert cents to dollars
+      }))
+      .sort((a, b) => (a.date < b.date ? -1 : 1));
+
+    return new Response(JSON.stringify(result), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  async handleSetCredit(url: URL) {
+    const newClv = Number(url.searchParams.get("clv"));
+
+    if (isNaN(newClv)) {
+      return new Response("Invalid clv", { status: 400 });
+    }
+
+    // Get the first sponsor (should only be one per DO)
+    const sponsorData = this.sql
+      .exec(
+        `
+      SELECT * FROM owners LIMIT 1
+    `,
+      )
+      .toArray();
+
+    if (sponsorData.length === 0) {
+      return new Response("Sponsor not found", { status: 404 });
+    }
+
+    const owner_id = sponsorData[0].owner_id;
+
+    // Update the CLV
+    this.sql.exec(
+      `
+      UPDATE owners
+      SET clv = ?
+      WHERE owner_id = ?
+    `,
+      newClv,
+      owner_id,
+    );
+
+    // Get the updated sponsor data
+    const updatedSponsor = this.sql
+      .exec(
+        `
+      SELECT
+        owner_id,
+        owner_login,
+        avatar_url,
+        blog,
+        bio,
+        email,
+        twitter_username,
+        is_authenticated,
+        is_sponsor,
+        clv,
+        spent,
+        balance,
+        source,
+        created_at AS createdAt,
+        updated_at AS updatedAt
+      FROM owners
+      WHERE owner_id = ?
+    `,
+        owner_id,
+      )
+      .one();
+
+    // Convert SQLite boolean integers to JavaScript booleans
+    const sponsor = {
+      ...updatedSponsor,
+      is_authenticated: updatedSponsor.is_authenticated === 1,
+      is_sponsor: updatedSponsor.is_sponsor === 1,
+    };
+
+    return new Response(JSON.stringify(sponsor), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  async handleCharge(url: URL) {
+    const chargeAmount = Number(url.searchParams.get("amount"));
+    const source = url.searchParams.get("source");
+    const idempotencyKey = url.searchParams.get("idempotency_key");
+
+    if (!idempotencyKey) {
+      return new Response("Idempotency key required", { status: 400 });
+    }
+
+    // Get the first sponsor (should only be one per DO)
+    const sponsorData = this.sql
+      .exec(
+        `
+      SELECT * FROM owners LIMIT 1
+    `,
+      )
+      .toArray();
+
+    if (sponsorData.length === 0) {
+      return new Response("Sponsor not found", { status: 404 });
+    }
+
+    const owner_id = sponsorData[0].owner_id;
+
+    // Check if charge already exists
+    const existingCharge = this.sql
+      .exec(
+        `
+      SELECT * FROM charges
+      WHERE id = ?
+    `,
+        idempotencyKey,
+      )
+      .toArray();
+
+    if (existingCharge.length > 0) {
+      return new Response(
+        JSON.stringify({
+          message: "Charge already processed",
+          charge: existingCharge[0],
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    // Update sponsor spent amount
+    this.sql.exec(
+      `
+      UPDATE owners
+      SET spent = spent + ?
+      WHERE owner_id = ?
+    `,
+      chargeAmount,
+      owner_id,
+    );
+
+    // Record the charge
+    this.sql.exec(
+      `
+      INSERT INTO charges (id, owner_id, amount, timestamp, source)
+      VALUES (?, ?, ?, ?, ?)
+    `,
+      idempotencyKey,
+      owner_id,
+      chargeAmount,
+      Date.now(),
+      source,
+    );
+
+    // Get the updated sponsor data
+    const updatedSponsor = this.sql
+      .exec(
+        `
+      SELECT
+        owner_id,
+        owner_login,
+        avatar_url,
+        blog,
+        bio,
+        email,
+        twitter_username,
+        is_authenticated,
+        is_sponsor,
+        clv,
+        spent,
+        balance,
+        source,
+        created_at AS createdAt,
+        updated_at AS updatedAt
+      FROM owners
+      WHERE owner_id = ?
+    `,
+        owner_id,
+      )
+      .one();
+
+    // Convert SQLite boolean integers to JavaScript booleans
+    const sponsor = {
+      ...updatedSponsor,
+      is_authenticated: updatedSponsor.is_authenticated === 1,
+      is_sponsor: updatedSponsor.is_sponsor === 1,
+    };
+
+    return new Response(JSON.stringify(sponsor), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+        Pragma: "no-cache",
+        Expires: "0",
+      },
+    });
   }
 }
 
@@ -518,8 +853,8 @@ export const setCredit = async (
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const id = env.SPONSOR_DO.idFromName(userId);
-  const stub = env.SPONSOR_DO.get(id);
+  const id = env.SPONSORFLARE_DO.idFromName(userId);
+  const stub = env.SPONSORFLARE_DO.get(id);
 
   const response = await stub.fetch(`http://fake-host/set-credit?clv=${clv}`);
 
@@ -839,8 +1174,8 @@ export const middleware = async (request: Request, env: Env) => {
       for (const sponsor of sponsorshipData.sponsors) {
         if (!sponsor.id) continue;
 
-        const id = env.SPONSOR_DO.idFromName(sponsor.id);
-        const stub = env.SPONSOR_DO.get(id);
+        const id = env.SPONSORFLARE_DO.idFromName(sponsor.id);
+        const stub = env.SPONSORFLARE_DO.get(id);
 
         // Prepare sponsor data
         const sponsorData: Sponsor = {
@@ -1078,8 +1413,8 @@ export const getSponsor = async (
 
   try {
     // Get Durable Object instance
-    const id = env.SPONSOR_DO.idFromName(ownerIdString);
-    let stub = env.SPONSOR_DO.get(id);
+    const id = env.SPONSORFLARE_DO.idFromName(ownerIdString);
+    let stub = env.SPONSORFLARE_DO.get(id);
 
     // Verify access token and get sponsor data
     const verifyResponse = await stub.fetch(
@@ -1108,9 +1443,9 @@ export const getSponsor = async (
       // this is the verified owner_id from the access_token from the API
       if (String(initialized.owner_id) !== ownerIdString) {
         ownerIdString = String(initialized.owner_id);
-        const id = env.SPONSOR_DO.idFromName(ownerIdString);
+        const id = env.SPONSORFLARE_DO.idFromName(ownerIdString);
         //owerwrite stub to prevent corrupt data
-        stub = env.SPONSOR_DO.get(id);
+        stub = env.SPONSORFLARE_DO.get(id);
       }
 
       sponsorData = initialized.sponsorData;
@@ -1211,8 +1546,8 @@ export const getUsage = async (request: Request, env: Env) => {
 
   try {
     // Get Durable Object instance
-    const id = env.SPONSOR_DO.idFromName(String(owner_id));
-    const stub = env.SPONSOR_DO.get(id);
+    const id = env.SPONSORFLARE_DO.idFromName(String(owner_id));
+    const stub = env.SPONSORFLARE_DO.get(id);
 
     // Verify access token and get sponsor data
     const verifyResponse = await stub.fetch(`http://fake-host/usage`);

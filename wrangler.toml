@@ -15,10 +15,14 @@ COOKIE_DOMAIN_SHARING = "true"
 ADMIN_OWNER_LOGIN = "janwilmake"
 
 [[durable_objects.bindings]]
-name = "SPONSOR_DO"
-class_name = "SponsorDO"
-
+name = "SPONSORFLARE_DO"
+class_name = "SponsorflareDO"
 
 [[migrations]]
 tag = "v1"
 new_classes = ["SponsorDO"]
+
+[[migrations]]
+tag = "v2"
+deleted_classes = ["SponsorDO"]
+new_sqlite_classes = ["SponsorflareDO"]

@@ -1,3 +1,5 @@
+import { Env } from "./main";
+
 // Define interfaces for the Durable Object and response types
 interface DurableObjectDescription {
   id: string;
@@ -21,6 +23,7 @@ interface UserData {
 
 /** Retrieve stats for your durable objects namespace. This function iterates over all durable objects in the namespace and retrieves the user info */
 export const stats = async (
+  env: Env,
   accountId: string,
   namespaceId: string,
   cloudflareApiKey: string,
@@ -80,11 +83,11 @@ export const stats = async (
       allObjects.map(async (obj) => {
         try {
           // Get Durable Object stub
-          const id = env.SPONSOR_DO.idFromString(obj.id);
-          const stub = env.SPONSOR_DO.get(id);
+          const id = env.SPONSORFLARE_DO.idFromString(obj.id);
+          const stub = env.SPONSORFLARE_DO.get(id);
 
           // Fetch user data from the Durable Object
-          const response = await stub.fetch("/user");
+          const response = await stub.fetch("http://internal/user");
           if (response.ok) {
             const userData: UserData = await response.json();
 
