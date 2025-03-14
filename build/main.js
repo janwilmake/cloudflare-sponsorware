@@ -1,5 +1,5 @@
-import { getSponsor, getUsage, html, middleware, stats, } from "./sponsorflare";
-export { SponsorflareDO } from "./sponsorflare";
+import { getSponsor, getUsage, html, middleware, stats, SponsorDO, } from "./sponsorflare";
+export { SponsorDO };
 export default {
     fetch: async (request, env) => {
         // Handle sponsorflare auth

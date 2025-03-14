@@ -238,7 +238,7 @@ const initializeUser = async (
   };
 
   // Get Durable Object instance
-  const id = env.SPONSOR_DO.idFromName(userData.id.toString());
+  const id = env.SPONSOR_DO.idFromName(String(userData.id));
   const stub = env.SPONSOR_DO.get(id);
 
   // Initialize the Durable Object with sponsor data and access token
@@ -449,6 +449,7 @@ export class SponsorDO {
       );
     }
 
+    console.log("INITIALIZED", sponsor);
     return new Response("Initialized", { status: 200 });
   }
 
@@ -1166,7 +1167,7 @@ export const middleware = async (request: Request, env: Env) => {
       }
 
       const sponsorshipData = await fetchAllSponsorshipData(env.GITHUB_PAT);
-      console.log({ sponsorshipData });
+      console.log("data", sponsorshipData);
       // Create promises array for all updates
       const updatePromises = [];
 
@@ -1174,12 +1175,12 @@ export const middleware = async (request: Request, env: Env) => {
       for (const sponsor of sponsorshipData.sponsors) {
         if (!sponsor.id) continue;
 
-        const id = env.SPONSOR_DO.idFromName(sponsor.id);
+        const id = env.SPONSOR_DO.idFromName(String(sponsor.id));
         const stub = env.SPONSOR_DO.get(id);
 
         // Prepare sponsor data
         const sponsorData: Sponsor = {
-          owner_id: sponsor.id,
+          owner_id: sponsor.id.toString(),
           owner_login: sponsor.login!,
           avatar_url: sponsor.avatarUrl,
           is_sponsor: true,
@@ -1189,23 +1190,25 @@ export const middleware = async (request: Request, env: Env) => {
 
         // Add update promise to array
         updatePromises.push(
-          stub.fetch(
-            new Request("http://fake-host/initialize", {
-              method: "POST",
-              body: JSON.stringify({
-                sponsor: sponsorData,
-                // We don't have access to individual access tokens here,
-                // so we'll only update the sponsor data
-                access_token: null,
+          stub
+            .fetch(
+              new Request("http://fake-host/initialize", {
+                method: "POST",
+                body: JSON.stringify({
+                  sponsor: sponsorData,
+                  // We don't have access to individual access tokens here,
+                  // so we'll only update the sponsor data
+                  access_token: null,
+                }),
               }),
-            }),
-          ),
+            )
+            .then((res) => res.text()),
         );
       }
 
       // Wait for all updates to complete
-      await Promise.all(updatePromises);
-
+      const results = await Promise.all(updatePromises);
+      console.log(results);
       return new Response("Received event", {
         status: 200,
       });
@@ -1597,7 +1600,7 @@ export const proxy =
     request.headers.set("sponsor", JSON.stringify(sponsorData));
 
     const response = await env[DO_NAME].get(
-      env[DO_NAME].idFromName(sponsorData.owner_id),
+      env[DO_NAME].idFromName(String(sponsorData.owner_id)),
     ).fetch(request);
 
     const charge = response.headers.get("X-Charge");

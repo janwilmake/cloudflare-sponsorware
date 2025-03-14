@@ -1,5 +1,5 @@
-import { Env as SponsorflareEnv } from "./sponsorflare";
-export { SponsorflareDO } from "./sponsorflare";
+import { Env as SponsorflareEnv, SponsorDO } from "./sponsorflare";
+export { SponsorDO };
 export interface Env extends SponsorflareEnv {
     ADMIN_OWNER_LOGIN: string;
     CLOUDFLARE_ACCOUNT_ID: string;

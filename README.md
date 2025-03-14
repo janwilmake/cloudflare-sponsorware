@@ -173,7 +173,7 @@ Because we're not using a global database but a separate database per user, the 
 
 ### 2025-02-14 QOL updates
 
-- ✅ due to the fact that remote do doesnt contain the same state as locally, we now can't authenticate in sponsorflare remotely from localhost. this can be resolved by, in sponsorflare, checking and adding an unknown auth token, if owner_id was provided
+- ✅ due to the fact that remote do doesnt contain the same state as locally, we now can't authenticate in sponsorflare remotely from localhost. this can be resolved by, in sponsorflare, checking and adding an unknown auth token, if `owner_id` was provided
 - ✅ Ensure to store email in the DB as well as bio, twitter username, blog.
 - ✅ Add ability to track created at, and last verified date
 - ✅ To list all items in the namespace, use https://developers.cloudflare.com/api/resources/durable_objects/subresources/namespaces/subresources/objects/methods/list/ and retrieve "sponsor" from storage.
@@ -196,6 +196,10 @@ Because we're not using a global database but a separate database per user, the 
 - ✅ Make a new DO that uses SQLite
 - ✅ Convert stuff to use SQLite
 - ✅ Deploy/publish this new version with README on how to migrate.
+
+### bugfixes (2025-03-14)
+
+- ✅ Fix bug with id sent as number, not as string, fixing the payments
 
 ### Finish Observability
 

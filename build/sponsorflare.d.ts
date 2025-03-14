@@ -15,7 +15,7 @@ export interface Env {
     GITHUB_WEBHOOK_SECRET: string;
     GITHUB_PAT: string;
     LOGIN_REDIRECT_URI: string;
-    SPONSORFLARE_DO: DurableObjectNamespace;
+    SPONSOR_DO: DurableObjectNamespace;
     /** If 'true', will skip login and use "GITHUB_PAT" for access */
     SKIP_LOGIN: string;
     COOKIE_DOMAIN_SHARING: string;
@@ -71,7 +71,7 @@ type CookieValue = {
 };
 export declare function createCookieSafeToken(data: CookieValue): string;
 export declare function parseCookieSafeToken(cookieValue: string): CookieValue | undefined;
-export declare class SponsorflareDO {
+export declare class SponsorDO {
     private state;
     private storage;
     private sql;

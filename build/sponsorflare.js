@@ -67,8 +67,8 @@ const initializeUser = async (env, access_token, source) => {
         updatedAt: Date.now(),
     };
     // Get Durable Object instance
-    const id = env.SPONSORFLARE_DO.idFromName(userData.id.toString());
-    const stub = env.SPONSORFLARE_DO.get(id);
+    const id = env.SPONSOR_DO.idFromName(String(userData.id));
+    const stub = env.SPONSOR_DO.get(id);
     // Initialize the Durable Object with sponsor data and access token
     const initResponse = await stub.fetch(new Request("http://fake-host/initialize", {
         method: "POST",
@@ -90,7 +90,7 @@ const initializeUser = async (env, access_token, source) => {
         owner_id: userData.id,
     };
 };
-export class SponsorflareDO {
+export class SponsorDO {
     state;
     storage;
     sql;
@@ -209,6 +209,7 @@ export class SponsorflareDO {
         ) VALUES (?, ?, ?, ?, ?)
       `, initData.access_token, sponsor.owner_id, initData.scope, initData.source, Date.now());
         }
+        console.log("INITIALIZED", sponsor);
         return new Response("Initialized", { status: 200 });
     }
     async handleUser() {
@@ -507,8 +508,8 @@ export const setCredit = async (request, env) => {
     if (!apiKey || apiKey !== env.GITHUB_PAT) {
         return new Response("Unauthorized", { status: 401 });
     }
-    const id = env.SPONSORFLARE_DO.idFromName(userId);
-    const stub = env.SPONSORFLARE_DO.get(id);
+    const id = env.SPONSOR_DO.idFromName(userId);
+    const stub = env.SPONSOR_DO.get(id);
     const response = await stub.fetch(`http://fake-host/set-credit?clv=${clv}`);
     if (!response.ok) {
         return new Response("Failed to set credit", { status: 500 });
@@ -745,18 +746,18 @@ export const middleware = async (request, env) => {
                 });
             }
             const sponsorshipData = await fetchAllSponsorshipData(env.GITHUB_PAT);
-            console.log({ sponsorshipData });
+            console.log("data", sponsorshipData);
             // Create promises array for all updates
             const updatePromises = [];
             // Update active sponsors
             for (const sponsor of sponsorshipData.sponsors) {
                 if (!sponsor.id)
                     continue;
-                const id = env.SPONSORFLARE_DO.idFromName(sponsor.id);
-                const stub = env.SPONSORFLARE_DO.get(id);
+                const id = env.SPONSOR_DO.idFromName(String(sponsor.id));
+                const stub = env.SPONSOR_DO.get(id);
                 // Prepare sponsor data
                 const sponsorData = {
-                    owner_id: sponsor.id,
+                    owner_id: sponsor.id.toString(),
                     owner_login: sponsor.login,
                     avatar_url: sponsor.avatarUrl,
                     is_sponsor: true,
@@ -764,7 +765,8 @@ export const middleware = async (request, env) => {
                     updatedAt: Date.now(),
                 };
                 // Add update promise to array
-                updatePromises.push(stub.fetch(new Request("http://fake-host/initialize", {
+                updatePromises.push(stub
+                    .fetch(new Request("http://fake-host/initialize", {
                     method: "POST",
                     body: JSON.stringify({
                         sponsor: sponsorData,
@@ -772,10 +774,12 @@ export const middleware = async (request, env) => {
                         // so we'll only update the sponsor data
                         access_token: null,
                     }),
-                })));
+                }))
+                    .then((res) => res.text()));
             }
             // Wait for all updates to complete
-            await Promise.all(updatePromises);
+            const results = await Promise.all(updatePromises);
+            console.log(results);
             return new Response("Received event", {
                 status: 200,
             });
@@ -907,8 +911,8 @@ export const getSponsor = async (request, env, config) => {
     let ownerIdString = String(owner_id);
     try {
         // Get Durable Object instance
-        const id = env.SPONSORFLARE_DO.idFromName(ownerIdString);
-        let stub = env.SPONSORFLARE_DO.get(id);
+        const id = env.SPONSOR_DO.idFromName(ownerIdString);
+        let stub = env.SPONSOR_DO.get(id);
         // Verify access token and get sponsor data
         const verifyResponse = await stub.fetch(`http://fake-host/verify?token=${encodeURIComponent(access_token)}`);
         let sponsorData;
@@ -930,9 +934,9 @@ export const getSponsor = async (request, env, config) => {
             // this is the verified owner_id from the access_token from the API
             if (String(initialized.owner_id) !== ownerIdString) {
                 ownerIdString = String(initialized.owner_id);
-                const id = env.SPONSORFLARE_DO.idFromName(ownerIdString);
+                const id = env.SPONSOR_DO.idFromName(ownerIdString);
                 //owerwrite stub to prevent corrupt data
-                stub = env.SPONSORFLARE_DO.get(id);
+                stub = env.SPONSOR_DO.get(id);
             }
             sponsorData = initialized.sponsorData;
         }
@@ -1012,8 +1016,8 @@ export const getUsage = async (request, env) => {
     }
     try {
         // Get Durable Object instance
-        const id = env.SPONSORFLARE_DO.idFromName(String(owner_id));
-        const stub = env.SPONSORFLARE_DO.get(id);
+        const id = env.SPONSOR_DO.idFromName(String(owner_id));
+        const stub = env.SPONSOR_DO.get(id);
         // Verify access token and get sponsor data
         const verifyResponse = await stub.fetch(`http://fake-host/usage`);
         if (!verifyResponse.ok) {
@@ -1052,7 +1056,7 @@ export const proxy = (DO_NAME) => async (request, env) => {
     }
     // ensure we have the data available
     request.headers.set("sponsor", JSON.stringify(sponsorData));
-    const response = await env[DO_NAME].get(env[DO_NAME].idFromName(sponsorData.owner_id)).fetch(request);
+    const response = await env[DO_NAME].get(env[DO_NAME].idFromName(String(sponsorData.owner_id))).fetch(request);
     const charge = response.headers.get("X-Charge");
     if (charge && !isNaN(Number(charge))) {
         const { charged } = await getSponsor(request, env, {
