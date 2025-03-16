@@ -18,6 +18,10 @@ ADMIN_OWNER_LOGIN = "janwilmake"
 name = "SPONSOR_DO"
 class_name = "SponsorDO"
 
+[[durable_objects.bindings]]
+name = "RATELIMIT_DO"
+class_name = "RatelimitDO"
+
 [[migrations]]
 tag = "v1"
-new_sqlite_classes = ["SponsorDO"]
+new_sqlite_classes = ["SponsorDO", "RatelimitDO"]

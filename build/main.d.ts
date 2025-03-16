@@ -1,7 +1,7 @@
 import { Env as SponsorflareEnv, SponsorDO } from "./sponsorflare";
-export { SponsorDO };
+import { RatelimitDO } from "./ratelimiter";
+export { SponsorDO, RatelimitDO };
 export interface Env extends SponsorflareEnv {
-    ADMIN_OWNER_LOGIN: string;
     CLOUDFLARE_ACCOUNT_ID: string;
     CLOUDFLARE_NAMESPACE_ID: string;
     CLOUDFLARE_API_KEY: string;

@@ -1,6 +1,8 @@
 {
   "include": [
+    "./ratelimiter.ts",
     "./sponsorflare.ts",
+    "./browsable.ts",
     "./main.ts",
     "./user-todo-example.ts",
     "./stats.ts"

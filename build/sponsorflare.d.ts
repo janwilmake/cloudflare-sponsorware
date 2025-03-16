@@ -9,6 +9,7 @@ export type Usage = {
     count: number;
 };
 export interface Env {
+    ADMIN_OWNER_LOGIN: string;
     GITHUB_CLIENT_ID: string;
     GITHUB_CLIENT_SECRET: string;
     GITHUB_REDIRECT_URI: string;
@@ -16,6 +17,7 @@ export interface Env {
     GITHUB_PAT: string;
     LOGIN_REDIRECT_URI: string;
     SPONSOR_DO: DurableObjectNamespace;
+    RATELIMIT_DO: DurableObjectNamespace;
     /** If 'true', will skip login and use "GITHUB_PAT" for access */
     SKIP_LOGIN: string;
     COOKIE_DOMAIN_SHARING: string;
@@ -73,8 +75,7 @@ export declare function createCookieSafeToken(data: CookieValue): string;
 export declare function parseCookieSafeToken(cookieValue: string): CookieValue | undefined;
 export declare class SponsorDO {
     private state;
-    private storage;
-    private sql;
+    sql: SqlStorage;
     constructor(state: DurableObjectState, env: Env);
     private initializeSchema;
     fetch(request: Request): Promise<Response>;

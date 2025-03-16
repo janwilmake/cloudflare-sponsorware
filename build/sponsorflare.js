@@ -1,3 +1,4 @@
+import { BrowsableHandler, corsPreflight } from "./browsable";
 export { stats } from "./stats";
 export function createCookieSafeToken(data) {
     // Base64Url encode
@@ -92,11 +93,9 @@ const initializeUser = async (env, access_token, source) => {
 };
 export class SponsorDO {
     state;
-    storage;
     sql;
     constructor(state, env) {
         this.state = state;
-        this.storage = state.storage;
         this.sql = state.storage.sql;
         // Initialize database schema if it doesn't exist
         this.initializeSchema();
@@ -149,6 +148,8 @@ export class SponsorDO {
         const url = new URL(request.url);
         // Handle different operations based on the path
         switch (url.pathname) {
+            case "/query/raw":
+                return new BrowsableHandler(this.sql).fetch(request);
             case "/initialize":
                 return await this.handleInitialize(request);
             case "/user":
@@ -894,6 +895,27 @@ export const middleware = async (request, env) => {
                     "Set-Cookie": `github_oauth_state=; HttpOnly; Path=/; Secure; Max-Age=0`,
                 },
             });
+        }
+    }
+    const chunks = url.pathname.split("/");
+    if (chunks.length === 4 && chunks[2] === "query" && chunks[3] === "raw") {
+        if (request.method === "OPTIONS") {
+            return corsPreflight();
+        }
+        if (request.method === "POST") {
+            // make it starbase browsable
+            const owner_id = chunks[1];
+            const id = env.SPONSOR_DO.idFromName(owner_id);
+            let stub = env.SPONSOR_DO.get(id);
+            const { is_authenticated, owner_login, access_token } = await getSponsor(request, env);
+            const isAdmin = owner_login === env.ADMIN_OWNER_LOGIN;
+            if (is_authenticated && isAdmin) {
+                const response = await stub.fetch(`http://fake-host/query/raw`, {
+                    method: "POST",
+                    body: JSON.stringify(await request.json()),
+                });
+                return response;
+            }
         }
     }
 };

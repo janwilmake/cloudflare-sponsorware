@@ -1,3 +1,5 @@
+import { BrowsableHandler, corsPreflight } from "./browsable";
+
 export { stats } from "./stats";
 
 declare global {
@@ -12,6 +14,7 @@ export type Usage = {
 };
 
 export interface Env {
+  ADMIN_OWNER_LOGIN: string;
   GITHUB_CLIENT_ID: string;
   GITHUB_CLIENT_SECRET: string;
   GITHUB_REDIRECT_URI: string;
@@ -19,6 +22,7 @@ export interface Env {
   GITHUB_PAT: string;
   LOGIN_REDIRECT_URI: string;
   SPONSOR_DO: DurableObjectNamespace;
+  RATELIMIT_DO: DurableObjectNamespace;
   /** If 'true', will skip login and use "GITHUB_PAT" for access */
   SKIP_LOGIN: string;
   COOKIE_DOMAIN_SHARING: string;
@@ -269,12 +273,10 @@ const initializeUser = async (
 
 export class SponsorDO {
   private state: DurableObjectState;
-  private storage: DurableObjectStorage;
-  private sql: SqlStorage;
+  public sql: SqlStorage;
 
   constructor(state: DurableObjectState, env: Env) {
     this.state = state;
-    this.storage = state.storage;
     this.sql = state.storage.sql;
 
     // Initialize database schema if it doesn't exist
@@ -333,6 +335,9 @@ export class SponsorDO {
 
     // Handle different operations based on the path
     switch (url.pathname) {
+      case "/query/raw":
+        return new BrowsableHandler(this.sql).fetch(request);
+
       case "/initialize":
         return await this.handleInitialize(request);
 
@@ -1380,6 +1385,33 @@ export const middleware = async (request: Request, env: Env) => {
           },
         },
       );
+    }
+  }
+
+  const chunks = url.pathname.split("/");
+  if (chunks.length === 4 && chunks[2] === "query" && chunks[3] === "raw") {
+    if (request.method === "OPTIONS") {
+      return corsPreflight();
+    }
+
+    if (request.method === "POST") {
+      // make it starbase browsable
+      const owner_id = chunks[1];
+      const id = env.SPONSOR_DO.idFromName(owner_id);
+      let stub = env.SPONSOR_DO.get(id);
+      const { is_authenticated, owner_login, access_token } = await getSponsor(
+        request,
+        env,
+      );
+      const isAdmin = owner_login === env.ADMIN_OWNER_LOGIN;
+
+      if (is_authenticated && isAdmin) {
+        const response = await stub.fetch(`http://fake-host/query/raw`, {
+          method: "POST",
+          body: JSON.stringify(await request.json()),
+        });
+        return response;
+      }
     }
   }
 };

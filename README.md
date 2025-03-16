@@ -23,14 +23,21 @@ Installation:
 [vars]
 GITHUB_REDIRECT_URI = "https://yourworkerdomain.com/callback"
 LOGIN_REDIRECT_URI = "/"
+ADMIN_OWNER_LOGIN = "your_admin_github_username"
+COOKIE_DOMAIN_SHARING = "false" # set this to true, if you want to share the cookie for the entire hostname/domain including all subdomains
 
 [[durable_objects.bindings]]
 name = "SPONSOR_DO"
 class_name = "SponsorDO"
 
+[[durable_objects.bindings]]
+name = "RATELIMIT_DO"
+class_name = "RatelimitDO"
+
 [[migrations]]
 tag = "v1"
-new_classes = ["SponsorDO"]
+new_sqlite_classes = ["SponsorDO", "RatelimitDO"]
+
 ```
 
 `main.ts`:
@@ -201,23 +208,39 @@ Because we're not using a global database but a separate database per user, the 
 
 - ✅ Fix bug with id sent as number, not as string, fixing the payments
 
-### Finish Observability
+### Finish Observability (2025-03-14)
 
-- Add https://gist.github.com/Brayden/dfbf51e889323484b10c7f4a7e343eb1 to Sponsorflare DO. For this, sponsorflare first needs to become a SQLite-enabled DO (✅)
-- Also add it to Sponsorflare middleware such that I can visit the API over `/sqlite/:name`
-- Also create a protected endpoint `/stats` as part of the middleware and ensure it also exposes the basePath for each db as part of the array..
-- Deploy for Sponsorflare itself
-- Try adding it as SQL Server in https://app.outerbase.com (Starbase)
+- ✅ Finished login setup with new sponsorflare2 script
+- ✅ export old sponsorflare one more time
+- ✅ ensure sponsorship works. test with other account
+- ✅ ensure I go to sponsorflare2 everywhere to avoid missing emails
+- ✅ Also add it to Sponsorflare middleware such that I can visit the API over `/:id`
+- ✅ Add https://gist.github.com/Brayden/dfbf51e889323484b10c7f4a7e343eb1 to Sponsorflare DO. For this, sponsorflare first needs to become a SQLite-enabled DO (✅)
+- ✅ Deploy for Sponsorflare itself
+- ✅ Try adding it as SQL Server in https://app.outerbase.com (Starbase)
 
 🎉 Goal: migrate sponsorflare to sqlite and see all data in it. Also have a simple DO middleware + sqlite middleware that can be added to any DO.
 
-### Solve logging.
+### Create ratelimiter
 
-- Also track the "access_token" last use.
+For uithub I need to ensure unauthenticated people are ratelimited, and authenticated people that didn't pay are still able to use the app, based on how much they spent. The ratelimiter allows for this type of new behavior.
+
+- ✅ Create a ratelimiter based on the IP that resets after X amount of requests.
+- Update README and deploy as v1.2
+- Install at uithub and ratelimit there with 25 per hour or 50 per hour, or 100 per hour, depending on auth status and $ spent.
+
+### Improvement
+
+- Insert the 100 users I had back into the DOs again
+- Also track the "access_token" last use for each access_token.
+- Ensure source of a user is the full domain, always. Seems not to be the case right now
+
+### Solve logging
+
 - `this.log` function that logs into a SQL table so I can track this via the dashboard. I can debug any DO now.
 - Solve `forgithub.activity` in the same way by connecting SQL_dashboard and using `this.log` instead of console.log only.
 
-🎉 Goal: have logging in forgithub activity so I know what's happening. try solve issue for merge!!!!
+🎉 Goal: have logging in forgithub activity so I know what's happening. try solve issue for merge!!
 
 ### Central Shadow DB
 

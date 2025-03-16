@@ -1,5 +1,6 @@
 import { getSponsor, getUsage, html, middleware, stats, SponsorDO, } from "./sponsorflare";
-export { SponsorDO };
+import { RatelimitDO } from "./ratelimiter";
+export { SponsorDO, RatelimitDO };
 export default {
     fetch: async (request, env) => {
         // Handle sponsorflare auth
