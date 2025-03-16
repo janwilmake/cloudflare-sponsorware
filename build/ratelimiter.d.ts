@@ -37,5 +37,5 @@ export declare class RatelimitDO extends DurableObject {
  */
 export declare function ratelimit(request: Request, env: any, options?: RateLimitOptions): Promise<{
     waitTime: number;
-    ratelimitHeaders: Map<string, string>;
+    ratelimitHeaders: Record<string, string>;
 } | undefined>;

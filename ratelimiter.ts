@@ -153,7 +153,7 @@ export async function ratelimit(
   env: any,
   options?: RateLimitOptions,
 ): Promise<
-  { waitTime: number; ratelimitHeaders: Map<string, string> } | undefined
+  { waitTime: number; ratelimitHeaders: Record<string, string> } | undefined
 > {
   // Get client IP from request headers
   const clientIp =
