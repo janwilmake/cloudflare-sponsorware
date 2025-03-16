@@ -226,8 +226,7 @@ Because we're not using a global database but a separate database per user, the 
 For uithub I need to ensure unauthenticated people are ratelimited, and authenticated people that didn't pay are still able to use the app, based on how much they spent. The ratelimiter allows for this type of new behavior.
 
 - ✅ Create a ratelimiter based on the IP that resets after X amount of requests.
-- Update README and deploy as v1.2
-- Install at uithub and ratelimit there with 25 per hour or 50 per hour, or 100 per hour, depending on auth status and $ spent.
+- ✅ Update README and deploy as v1.2
 
 ### Improvement
 
