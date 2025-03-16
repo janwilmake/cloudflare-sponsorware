@@ -1,3 +1,5 @@
+import { ratelimit, RatelimitDO } from "./ratelimiter";
+export { ratelimit, RatelimitDO };
 export { stats } from "./stats";
 declare global {
     var env: Env;

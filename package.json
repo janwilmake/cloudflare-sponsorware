@@ -1,6 +1,6 @@
 {
   "name": "sponsorflare",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "main": "build/sponsorflare.js",
   "types": "build/sponsorflare.d.ts",
   "devDependencies": {

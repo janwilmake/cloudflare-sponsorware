@@ -1,5 +1,6 @@
 import { BrowsableHandler, corsPreflight } from "./browsable";
-
+import { ratelimit, RatelimitDO } from "./ratelimiter";
+export { ratelimit, RatelimitDO };
 export { stats } from "./stats";
 
 declare global {

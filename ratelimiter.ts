@@ -1,5 +1,4 @@
 import { DurableObject } from "cloudflare:workers";
-import { Env } from "./sponsorflare";
 
 export interface RateLimitOptions {
   requestLimit: number;
@@ -22,7 +21,7 @@ export class RatelimitDO extends DurableObject {
   private remainingRequests: number;
   private resetTime: number;
 
-  constructor(ctx: any, env: Env) {
+  constructor(ctx: any, env: any) {
     super(ctx, env);
     // Default values will be overridden in checkRequest()
     this.requestLimit = RatelimitDO.DEFAULT_REQUEST_LIMIT;
@@ -151,7 +150,7 @@ export class RatelimitDO extends DurableObject {
  */
 export async function ratelimit(
   request: Request,
-  env: Env,
+  env: any,
   options?: RateLimitOptions,
 ): Promise<
   { waitTime: number; ratelimitHeaders: Map<string, string> } | undefined

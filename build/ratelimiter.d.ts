@@ -1,5 +1,4 @@
 import { DurableObject } from "cloudflare:workers";
-import { Env } from "./sponsorflare";
 export interface RateLimitOptions {
     requestLimit: number;
     resetIntervalMs: number;
@@ -16,7 +15,7 @@ export declare class RatelimitDO extends DurableObject {
     private resetIntervalMs;
     private remainingRequests;
     private resetTime;
-    constructor(ctx: any, env: Env);
+    constructor(ctx: any, env: any);
     /**
      * Main method to check if a request can proceed and initialize state if needed.
      * This combines the previous initialize() and getMillisecondsToNextRequest() methods.
@@ -36,7 +35,7 @@ export declare class RatelimitDO extends DurableObject {
 /**
  * Function to rate limit requests based on client IP
  */
-export declare function ratelimit(request: Request, env: Env, options?: RateLimitOptions): Promise<{
+export declare function ratelimit(request: Request, env: any, options?: RateLimitOptions): Promise<{
     waitTime: number;
     ratelimitHeaders: Map<string, string>;
 } | undefined>;
