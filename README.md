@@ -44,7 +44,7 @@ new_sqlite_classes = ["SponsorDO", "RatelimitDO"]
 
 ```ts
 import { middleware, getSponsor, Env } from "sponsorflare";
-export { SponsorDO } from "./sponsorflare";
+export { SponsorDO, RatelimitDO } from "./sponsorflare";
 
 export default {
   fetch: async (request: Request, env: Env) => {
