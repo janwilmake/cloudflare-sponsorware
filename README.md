@@ -4,6 +4,11 @@ Inspired by [sponsorware](https://github.com/sponsorware/docs) and [this blog](h
 
 ![](flow.drawio.png)
 
+Examples:
+
+- this repo itself exposes https://sponsorflare.com at [main.ts](main.ts)
+- https://github.com/janwilmake/zipobject - example of ratelimit + github oauth + bandwidth-based monetisation
+
 ## Usage
 
 Installation:
