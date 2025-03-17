@@ -226,7 +226,7 @@ Because we're not using a global database but a separate database per user, the 
 
 🎉 Goal: migrate sponsorflare to sqlite and see all data in it. Also have a simple DO middleware + sqlite middleware that can be added to any DO.
 
-### Create ratelimiter
+### Create ratelimiter (2025-03-16)
 
 For uithub I need to ensure unauthenticated people are ratelimited, and authenticated people that didn't pay are still able to use the app, based on how much they spent. The ratelimiter allows for this type of new behavior.
 
