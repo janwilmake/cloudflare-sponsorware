@@ -2,7 +2,7 @@ import { DurableObject } from "cloudflare:workers";
 import { proxy } from "./sponsorflare";
 export class TodoDO extends DurableObject {
     db;
-    constructor(state) {
+    constructor(state, env) {
         super(state, env);
         this.db = state.storage.sql;
         this.db.exec(`

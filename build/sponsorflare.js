@@ -669,8 +669,14 @@ const callbackGetAccessToken = async (request, env) => {
     const redirectUriCookie = redirectUriCookieRaw
         ? decodeURIComponent(redirectUriCookieRaw)
         : undefined;
-    if (!urlState || !stateCookie || urlState !== stateCookie) {
-        return { error: `Invalid state`, status: 400 };
+    if (!urlState) {
+        return { error: `URL does not include state param`, status: 400 };
+    }
+    if (!stateCookie) {
+        return { error: `State cookie not found`, status: 400 };
+    }
+    if (urlState !== stateCookie) {
+        return { error: `URL state does not match cookie`, status: 400 };
     }
     const code = url.searchParams.get("code");
     if (!code) {

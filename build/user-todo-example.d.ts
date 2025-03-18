@@ -5,9 +5,12 @@ export interface Todo {
     completed: boolean;
     created_at: string;
 }
+interface Env {
+    TODO_DO: DurableObjectNamespace;
+}
 export declare class TodoDO extends DurableObject {
     private db;
-    constructor(state: DurableObjectState);
+    constructor(state: DurableObjectState, env: Env);
     fetch(request: Request): Promise<Response>;
 }
 declare const _default: {

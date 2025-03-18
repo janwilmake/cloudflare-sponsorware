@@ -14,7 +14,7 @@ interface Env {
 export class TodoDO extends DurableObject {
   private db: SqlStorage;
 
-  constructor(state: DurableObjectState) {
+  constructor(state: DurableObjectState, env: Env) {
     super(state, env);
     this.db = state.storage.sql;
     this.db.exec(`
