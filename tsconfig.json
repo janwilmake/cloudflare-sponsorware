@@ -1,19 +1,12 @@
 {
-  "include": [
-    "./ratelimiter.ts",
-    "./sponsorflare.ts",
-    "./browsable.ts",
-    "./main.ts",
-    "./user-todo-example.ts",
-    "./stats.ts"
-  ],
+  "include": ["*.ts"],
   "compilerOptions": {
     "lib": ["ESNext"],
     "target": "ESNext",
     "strict": true,
+    "types": ["./worker-configuration.d.ts"],
     "outDir": "build",
     "skipLibCheck": true,
-    "types": ["@cloudflare/workers-types"],
     "declaration": true
   }
 }

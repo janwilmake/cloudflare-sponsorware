@@ -1,5 +1,4 @@
-import { DurableObject } from "cloudflare:workers";
-
+import { env, DurableObject } from "cloudflare:workers";
 export const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PATCH, PUT, DELETE, OPTIONS",

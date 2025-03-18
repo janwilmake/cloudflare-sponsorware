@@ -3,10 +3,6 @@ import { ratelimit, RatelimitDO } from "./ratelimiter";
 export { ratelimit, RatelimitDO };
 export { stats } from "./stats";
 
-declare global {
-  var env: Env;
-}
-
 export type Usage = {
   totalAmount: number;
   date: string;
@@ -583,7 +579,7 @@ export class SponsorDO {
     });
   }
 
-  async handleUsage() {
+  public async handleUsage() {
     // Get all charges
     const charges = this.sql
       .exec(
@@ -1070,8 +1066,15 @@ const callbackGetAccessToken = async (request: Request, env: Env) => {
     ? decodeURIComponent(redirectUriCookieRaw)
     : undefined;
 
-  if (!urlState || !stateCookie || urlState !== stateCookie) {
-    return { error: `Invalid state`, status: 400 };
+  if (!urlState) {
+    return { error: `URL does not include state param`, status: 400 };
+  }
+  if (!stateCookie) {
+    return { error: `State cookie not found`, status: 400 };
+  }
+
+  if (urlState !== stateCookie) {
+    return { error: `URL state does not match cookie`, status: 400 };
   }
 
   const code = url.searchParams.get("code");
