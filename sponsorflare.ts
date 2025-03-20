@@ -1432,6 +1432,8 @@ export const getSponsor = async (
   },
 ): Promise<
   {
+    /** authorization token used to get access (can be in header, cookie, or queryparam) */
+    authorization?: string;
     /** if true, it means the charge was added to 'spent' */
     charged: boolean;
     access_token?: string | null;
@@ -1439,7 +1441,8 @@ export const getSponsor = async (
     scope?: string | null;
   } & Partial<Sponsor>
 > => {
-  const { owner_id, access_token, scope } = getAuthorization(request);
+  const { owner_id, access_token, scope, authorization } =
+    getAuthorization(request);
   if (!owner_id || !access_token) {
     return {
       is_authenticated: false,
@@ -1526,6 +1529,7 @@ export const getSponsor = async (
           is_authenticated: true,
           access_token,
           scope,
+          authorization,
           ...updatedData,
           balance,
           charged,
@@ -1535,6 +1539,7 @@ export const getSponsor = async (
 
     return {
       is_authenticated: true,
+      authorization,
       ...sponsorData,
       access_token,
       scope,
@@ -1574,7 +1579,7 @@ export const getAuthorization = (request: Request) => {
 
   const { access_token, scope, owner_id } = parse;
 
-  return { scope, owner_id, access_token };
+  return { authorization, scope, owner_id, access_token };
 };
 
 export const getUsage = async (request: Request, env: Env) => {

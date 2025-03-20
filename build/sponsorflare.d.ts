@@ -95,6 +95,8 @@ export declare const getSponsor: (request: Request, env: Env, config?: {
     /** if true, total spent amount may surpass clv */
     allowNegativeClv?: boolean;
 }) => Promise<{
+    /** authorization token used to get access (can be in header, cookie, or queryparam) */
+    authorization?: string;
     /** if true, it means the charge was added to 'spent' */
     charged: boolean;
     access_token?: string | null;
@@ -105,10 +107,12 @@ export declare const getSponsor: (request: Request, env: Env, config?: {
  * Parses authorization details from the cookie, header, or query
  */
 export declare const getAuthorization: (request: Request) => {
+    authorization?: undefined;
     scope?: undefined;
     owner_id?: undefined;
     access_token?: undefined;
 } | {
+    authorization: string;
     scope: string;
     owner_id: number;
     access_token: string;

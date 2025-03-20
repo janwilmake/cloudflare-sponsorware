@@ -929,7 +929,7 @@ export const middleware = async (request, env) => {
 };
 // Update the getSponsor function
 export const getSponsor = async (request, env, config) => {
-    const { owner_id, access_token, scope } = getAuthorization(request);
+    const { owner_id, access_token, scope, authorization } = getAuthorization(request);
     if (!owner_id || !access_token) {
         return {
             is_authenticated: false,
@@ -997,6 +997,7 @@ export const getSponsor = async (request, env, config) => {
                     is_authenticated: true,
                     access_token,
                     scope,
+                    authorization,
                     ...updatedData,
                     balance,
                     charged,
@@ -1005,6 +1006,7 @@ export const getSponsor = async (request, env, config) => {
         }
         return {
             is_authenticated: true,
+            authorization,
             ...sponsorData,
             access_token,
             scope,
@@ -1037,7 +1039,7 @@ export const getAuthorization = (request) => {
         return {};
     }
     const { access_token, scope, owner_id } = parse;
-    return { scope, owner_id, access_token };
+    return { authorization, scope, owner_id, access_token };
 };
 export const getUsage = async (request, env) => {
     const { owner_id, access_token } = getAuthorization(request);
