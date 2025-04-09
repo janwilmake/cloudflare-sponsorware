@@ -233,10 +233,26 @@ For uithub I need to ensure unauthenticated people are ratelimited, and authenti
 - ✅ Create a ratelimiter based on the IP that resets after X amount of requests.
 - ✅ Update README and deploy as v1.2
 
+### 2025-04-01
+
+Sponsorflare improvements
+
+- Add support for `username:password@` in ANY URL by connecting that to sponsorflares `getSponsor`.
+- Add `/oauth/token` to sponsorflare as well, having it create an access token that can also be used as password now.
+- Add support to create tokens with specific scope, timeout, and budget.
+- Add optional ability to connect central DO for READ-only for all users and transactions. The central DO must be required to implement the `/sqlite` endpoint and certain tables. This way you can have your state centrally
+- Add X login to sponsorflare???
+- Update endpoints to be `/oauth/login`, `/oauth/callback`, `/oauth/logout`, `/oauth/token` etc, as it's more standardized.
+
+Then:
+
+- Use new sponsorflare in `user-agent-router`, and show why the combination of it is so powerful.
+- Use new sponsorflare in `xymake.console`. This could be the start of something wonderful.
+
 ### Improvement
 
 - Insert the 100 users I had back into the DOs again
-- Also track the "access_token" last use for each access_token.
+- Also track the "access_token" last use for each `access_token`.
 - Ensure source of a user is the full domain, always. Seems not to be the case right now
 
 ### Solve logging

@@ -66,10 +66,13 @@ export class RatelimitDO extends DurableObject {
             "X-RateLimit-Remaining": this.remainingRequests.toString(),
             "X-RateLimit-Reset": Math.ceil(this.resetTime / 1000).toString(), // Unix timestamp in seconds
         };
-        // Save state after modifications
-        await this.saveState();
-        // Set alarm for the next reset
-        await this.setResetAlarm();
+        // do this last bit without letting the user wait
+        this.ctx.waitUntil((async () => {
+            // Save state after modifications
+            await this.saveState();
+            // Set alarm for the next reset
+            await this.setResetAlarm();
+        })());
         return {
             waitTime,
             ratelimitHeaders,
