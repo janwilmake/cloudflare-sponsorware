@@ -233,7 +233,13 @@ For uithub I need to ensure unauthenticated people are ratelimited, and authenti
 - ✅ Create a ratelimiter based on the IP that resets after X amount of requests.
 - ✅ Update README and deploy as v1.2
 
-### 2025-04-01
+###
+
+Try rewriting on top of https://github.com/janwilmake/dorm
+
+See if that makes it more approachable or doesn't change much! Ideally, I have an easy way to open any DO in the outerbase UI.
+
+###
 
 Sponsorflare improvements
 
