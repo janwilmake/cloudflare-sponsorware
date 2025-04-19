@@ -1,5 +1,7 @@
 # Sponsorflare - Cloudflare Middleware for easy Monetisation of a worker using GitHub Sponsors
 
+[![janwilmake/cloudflare-sponsorware context](https://badge.forgithub.com/janwilmake/cloudflare-sponsorware)](https://uithub.com/janwilmake/cloudflare-sponsorware) [![](https://badge.xymake.com/janwilmake/status/1883922928976162947)](https://xymake.com/janwilmake/status/1883922928976162947)
+
 Inspired by [sponsorware](https://github.com/sponsorware/docs) and [this blog](https://calebporzio.com/sponsorware), sponsorflare aims allowing for [cloudflare workers](https://workers.cloudflare.com) monetisation in a few lines of code.
 
 ![](flow.drawio.png)
