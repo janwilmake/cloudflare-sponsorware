@@ -1,6 +1,5 @@
 {
   "name": "sponsorflare",
-  "version": "0.2.6",
-  "main": "build/sponsorflare.js",
-  "types": "build/sponsorflare.d.ts"
+  "version": "0.2.11",
+  "main": "sponsorflare.ts"
 }

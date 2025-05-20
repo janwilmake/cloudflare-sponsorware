@@ -1175,10 +1175,12 @@ export const middleware = async (request: Request, env: Env) => {
         });
       }
 
+      // TODO: also ensure to process the new sponsor, as it's not always included in the below request for new sponsors!!!
+      // json.sponsorship.sponsor?.login
       const sponsorshipData = await fetchAllSponsorshipData(env.GITHUB_PAT);
       console.log("data", sponsorshipData);
       // Create promises array for all updates
-      const updatePromises = [];
+      const updatePromises: Promise<string>[] = [];
 
       // Update active sponsors
       for (const sponsor of sponsorshipData.sponsors) {
@@ -1296,7 +1298,27 @@ export const middleware = async (request: Request, env: Env) => {
       owner_id: Number(result.sponsorData.owner_id),
       scope: result.scope,
     });
-    return new Response(token, { status: 200 });
+
+    const skipLogin = env.SKIP_LOGIN === "true";
+
+    const securePart = skipLogin ? "" : " Secure;";
+    const domainPart =
+      env.COOKIE_DOMAIN_SHARING === "true" && !skipLogin
+        ? ` Domain=${domain};`
+        : "";
+
+    const bearerToken = createCookieSafeToken({
+      access_token: github_access_token,
+      owner_id: Number(result.sponsorData.owner_id),
+      scope: result.scope,
+    });
+
+    return new Response(token, {
+      status: 200,
+      headers: {
+        "Set-Cookie": `authorization=Bearer%20${bearerToken};${domainPart} HttpOnly; Path=/;${securePart} Max-Age=34560000; SameSite=Lax`,
+      },
+    });
   }
 
   // GitHub OAuth callback route

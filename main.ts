@@ -1,3 +1,6 @@
+//@ts-check
+/// <reference types="@cloudflare/workers-types" />
+
 import {
   Env as SponsorflareEnv,
   getSponsor,
@@ -7,6 +10,7 @@ import {
   Usage,
   stats,
   SponsorDO,
+  setCredit,
 } from "./sponsorflare";
 import { RatelimitDO } from "./ratelimiter";
 export { SponsorDO, RatelimitDO };
@@ -43,6 +47,20 @@ export default {
       return new Response(JSON.stringify(result, undefined, 2), {
         headers: { "content-type": "application/json" },
       });
+    }
+
+    if (url.pathname === "/set-credit") {
+      // if (owner_login === env.ADMIN_OWNER_LOGIN) {
+      const result = await setCredit(request, env);
+      return new Response(JSON.stringify(result, undefined, 2), {
+        headers: { "content-type": "application/json" },
+      });
+      // } else {
+      //   return new Response(
+      //     `Incorrect owner login ${owner_login} !== ${env.ADMIN_OWNER_LOGIN}; ${is_authenticated}`,
+      //     { status: 400 },
+      //   );
+      // }
     }
 
     const { usage, error } = await getUsage(request, env);
