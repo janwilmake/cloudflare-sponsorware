@@ -1,0 +1,1 @@
+this is a way to list all durable objects for this instance. this helps to get an aggregation of your users, although it's not practical currently because it doesn't work if there are more than 1000 users. further work will be needed to create better analytics about your users. maybe, it's a better option to keep this separate.
